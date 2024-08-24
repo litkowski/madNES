@@ -42,6 +42,7 @@ CPU::load_instr(char opcode){
     //      ZP - Zero Page
     //      XZP - X-Indexed Zero Page
     //      XZPI - X-Indexed Zero Page Indirect
+    //
     //      N/A - Implicit
     switch(opcode){
         case 0x69 : ADC_IM
@@ -49,6 +50,8 @@ CPU::load_instr(char opcode){
         case 0x7D : ADC_XABS
         case 0x79 : ADC_YABS
         case 0x65 : ADC_ZP
+        case 0x75 : ADC_XZP
+        case 0x65 : ADC_XZPI
         case
     }
 
