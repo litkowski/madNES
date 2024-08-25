@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "read.h"
 
@@ -16,6 +17,16 @@ int main(int argc, char* argv[]){
         printf("ERROR, file %s does not exist in current context.\n", argv[0]);
     }
 
-    read_header(game);
+    char* memory =
+
+    bool quit = false;
+
+    // Game loop
+    while(!quit){
+        CPU.cycle();
+        PPU.cycle();
+        PPU.cycle();
+        PPU.cycle();
+    }
 
 }
