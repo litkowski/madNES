@@ -1,7 +1,8 @@
-#include <stdio.h>
-#include <string.h>
+#include <iostream>
+#include <cstring>
 
 #include "read.h"
+
 
 int main(int argc, char* argv[]){
 
@@ -17,7 +18,8 @@ int main(int argc, char* argv[]){
         printf("ERROR, file %s does not exist in current context.\n", argv[0]);
     }
 
-    char* memory =
+
+
 
     bool quit = false;
 
@@ -29,4 +31,6 @@ int main(int argc, char* argv[]){
         PPU.cycle();
     }
 
+
 }
+
