@@ -9,41 +9,41 @@ enum nes_nametable_arrangement {VERT, HORIZ};
 enum expansion_device {UNSPECIFIED, NES_CONTROLLER};
 
 struct ines_info {
-	uint16_t prg_rom_size;
-	uint16_t chr_rom_size;
+	uint16_t prg_rom_size = 0;
+	uint16_t chr_rom_size = 0;
 
-	uint16_t mapper;
+	uint16_t mapper = 0;
 
 	nes_nametable_arrangement nametable_arrangement;
-	bool persistent_memory;
-	bool trainer;
-	bool alt_nametable_layout;
+	bool persistent_memory = false;
+	bool trainer = false;
+	bool alt_nametable_layout = false;
 	nes_console_type console_type;
-	bool ines_2;
+	bool ines_2 = false;
 
-	uint32_t prg_ram_size;
-	uint32_t chr_ram_size;
+	uint32_t prg_ram_size = 0;
 
 	nes_tv_system tv_system;
-	bool vs_system;
+	bool vs_system = false;
 	uint8_t vs_system_type;
 
 
 	// iNES 2.0 specific fields
-	uint32_t prg_nvram_size;
-	uint32_t chr_nvram_size;
+	uint32_t chr_ram_size = 0;
+	uint32_t prg_nvram_size = 0;
+	uint32_t chr_nvram_size = 0;
 
-	uint8_t submapper;
+	uint8_t submapper = 0;
 
 	uint8_t vs_hardware_type;
 	uint8_t extended_console_type;
 
-	uint8_t misc_roms;
+	uint8_t misc_roms = 0;;
 	expansion_device default_expansion_dev;
 
 	// iNES 1 specific fields
-	bool prg_ram_present;
-	bool bus_conflicts;
+	bool prg_ram_present = false;
+	bool bus_conflicts = false;
 
 };
 
