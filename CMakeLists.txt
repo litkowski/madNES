@@ -21,6 +21,6 @@ set(SOURCES
 	# src/ppu.hpp
 )
 
-add_executable(nes ${SOURCES})
+add_executable(madNES ${SOURCES})
 
 target_include_directories(nes PRIVATE include)
