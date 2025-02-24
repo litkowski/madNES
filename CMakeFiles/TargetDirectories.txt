@@ -1,3 +1,0 @@
-/home/daniel/Documents/Projects/NES/CMakeFiles/nes.dir
-/home/daniel/Documents/Projects/NES/CMakeFiles/edit_cache.dir
-/home/daniel/Documents/Projects/NES/CMakeFiles/rebuild_cache.dir
