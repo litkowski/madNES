@@ -1,3 +1,6 @@
+#ifndef CPU_H
+#define CPU_H
+
 // Class to contain core CPU functionality
 class CPU {
 
@@ -17,7 +20,14 @@ class CPU {
     //      REL - Relative
     enum address_mode {
         IMPL, ACC, IMM, ABS, XABS, YABS, ABSI, ZP, XZP, YZP, XZPI, ZPIY, REL
+
     };
+
+    // Store
+    struct cycle_action {
+        std::function<void()> first;
+        std::function<void()> second;
+    }
 
     // All instruction functions, each one will queue a number of single-cycle actions
     // NOTE: This will be expanded to include illegal opcodes in the future
@@ -78,15 +88,17 @@ class CPU {
     void TYA (address_mode);
 
     // Pointer to the combined game and computer memory
-    int* memory;
+    Mapper memory;
 
-    // 6502 data; accumulator, X and Y registers, stack pointer status
+    // 6502 data; accumulator, X and Y registers, stack pointer, status
     // register, data bus, opcode register, program counter, and address bus
-    char acc, x, y, sp, status, dbus, opcode;
-    short pc, abus;
+    uint8_t acc, x, y, sp, status, dbus, opcode;
+    uint16_t pc, abus;
 
+    // Temporary registers to hold address low bytes in
+    uint8_t ladd_temp, pcl_temp;
 
-    char fetch (short address);
+    uint8_t fetch (uint16_t address);
 
     // Single cycle actions that the CPU can take
     void write ();
@@ -97,7 +109,6 @@ class CPU {
     void fetch_y ();
     void fetch_pch ();
     void fetch_pcl ();
-
 
     void fetch_acc ();
 
@@ -117,14 +128,13 @@ class CPU {
 
     void decode ();
 
-
-
     // Queue to store cycle events in for the current instruction, with a pointer
     // to the next event to be executed
-    void (*event_queue[2][8]) ();
-    char cur_event;
+    std::vector<std::function<void()>> events;
 
     public:
-        CPU(int* rom);
+        CPU(uint8_t* rom);
         cycle();
 };
+
+#endif

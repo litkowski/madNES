@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -Wl,--dependency-file=CMakeFiles/nes.dir/link.d CMakeFiles/nes.dir/src/main.cpp.o CMakeFiles/nes.dir/src/parse_rom.cpp.o CMakeFiles/nes.dir/src/mappers.cpp.o CMakeFiles/nes.dir/src/parse_args.cpp.o -o nes

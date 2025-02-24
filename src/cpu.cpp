@@ -2,42 +2,31 @@
 #include <cstring>
 
 
-
-
-
 // CPU constructor
 CPU::CPU (int* rom) {
     memory = rom;
-    status = 0b00100000
+    status = 0b00100000;
     acc = x = y = dbus = 0;
     abus = 0;
+    ladd_temp = 0;
     sp = 0x200;
     pc = 0x000;
 }
 
-
-
-// Cycle the CPU once. Calls both potential operations
+// Cycle the CPU once. Calls both potential operations on
 CPU::cycle () {
 
-    event_queue[0][cur_event];
-
-    if(event_queue[1][cur_event] != NULL){
-        event_queue[1][cur_event];
+    // Execute the atomic event or events in the front of the event queue, remove it from the queue
+    for (auto atomic_event : events[0]) {
+        atomic_event;
     }
-
-    cur_event++;
+    events.pop();
 }
 
-
-
 // Fetch the byte at the given address and return it
-// NOTE: All memory reads go through this function to make
-// mappers easier to implement in the future
 CPU::fetch (short address) {
     return memory[address];
 }
-
 
 // Fetch opcode into the opcode register from PC's address
 CPU::fetch_opcode () {
@@ -46,13 +35,19 @@ CPU::fetch_opcode () {
 }
 
 // Fetch data into the data bus from the address bus
-CPU::fetch_data () {
+CPU::fetch_data_abus () {
     dbus = fetch(abus);
+}
+
+// Fetch data into the data bus from PC
+CPU::fetch_data_pc () {
+    dbus = fetch(pc);
 }
 
 // Fetch data into the data bus from the low byte of the address bus
 CPU::fetch_zp () {
-    dbus = fetch()
+    zp_add = abus &= 0x0F;
+    dbus = fetch(zp_add);
 }
 
 // Fetch data into the X register from the address bus
@@ -65,29 +60,44 @@ CPU::fetch_y () {
     y = dbus = fetch(abus);
 }
 
-// Fetch data into the low byte of the address bus from dbus
-CPU::fetch_ladd () {
-    dbus = fetch(pc);
+// Fetch data into the low byte of the address bus from the parameter.
+// If the parameter is pc, increment pc.
+CPU::fetch_ladd (short address) {
+    dbus = fetch(address);
     abus = (abus &= 0xF0) | (dbus);
-    pc++;
+
+    if (address == pc) {
+        pc++;
+    }
 }
 
-// Fetch data into the high byte of the address bus from PC
-CPU::fetch_hadd () {
-    dbus = fetch(pc);
+// Fetch data into the high byte of the address bus from the parameter.
+// If the parameter is pc, increment pc.
+CPU::fetch_hadd (short address) {
+    dbus = fetch(address);
     abus = (abus &= 0x0F) | (dbus << 8);
-    pc++;
+
+    if (address == pc) {
+        pc++
+    }
 }
 
 // If the addition to the low byte of address has carried, add
 // one to the high byte. Else skip the next cycle
 CPU::fix_add () {
-    if()
+    if () {
+
+    }
 }
 
 // Fetch data at abus into the accumulator
 CPU::fetch_acc () {
     acc = dbus = fetch(abus);
+}
+
+// Set abus to the parameter
+CPU::set_abus (short address) {
+    abus = address;
 }
 
 // Add the data from dbus into the accumulator with carry
@@ -125,65 +135,46 @@ CPU::ADC (address_mode mode) {
     // the addressing mode
     switch (mode) {
         case IMM:
-            void (*events[][]) () =
-                {{&fetch_data, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 4);
+            events.insert({{&fetch_data_pc, &adc_acc}, {&fetch_opcode, &decode}});
             break;
 
         case ABS:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_hadd, NULL},
-                {&fetch_data, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 8);
+            events.insert({{&fetch_ladd_pc}, {&fetch_hadd_pc},
+                            {&fetch_data_abus, &adc_acc}, {&fetch_opcode, &decode}});
             break;
 
         case XABS:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_hadd, &add_xladd}, {&fetch_data, &fix_add},
-                {&fetch_data, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 10);
+            events.insert({{&fetch_ladd_pc}, {&fetch_hadd_pc, &add_x_ladd},
+                {&fetch_data_abus, &fix_add_skip}, {&fetch_data_abus, &adc_acc},
+                {&fetch_opcode, &decode}});
             break;
 
         case YABS:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_hadd, &add_yladd}, {&fetch_data, &fix_add},
-                {&fetch_data, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 10);
+            events.insert({{&fetch_ladd_pc}, {&fetch_hadd_pc, &add_y_ladd},
+                {&fetch_data_abus, &fix_add_skip},
+                {&fetch_data_abus, &adc_acc}, {&fetch_opcode, &decode}})
             break;
 
         case ZP:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_data_zp, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 6);
+            events.insert({{&fetch_ladd_pc}, {&fetch_data_zp, &adc_acc},
+                {&fetch_opcode, &decode}});
             break;
 
         case XZP:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_ladd, &add_xladd},
-                {&fetch_data_zp, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 8);
+            events.insert({{&fetch_ladd_pc}, {&fetch_ladd_zp, &add_x_ladd},
+                {&fetch_zp_abus, &adc_acc}, {&fetch_opcode, &decode}};
             break;
 
         case XZPI:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_data, &add_dbusx}, {&fetch_ladd, &inc_abus},
-                {&fetch_hadd, NULL}, {&fetch_data, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 12);
+            events.insert({{&fetch_ladd_pc}, {&fetch_ladd_zp, &add_x_ladd},
+                {&fetch_ladd_zp, &inc_ladd}, {&fetch_hadd_zp}, {&fetch_data_abus, &adc_acc},
+                {&fetch_opcode, &decode}};
             break;
 
         case ZPIY:
-            void (*events[][]) () =
-                {{&fetch_ladd, NULL}, {&fetch_ladd, &inc_abus}, {&fetch_hadd, &add_yladd},
-                {&fetch_data, &fix_add}, {&fetch_data, &adc_acc}, {&fetch_opcode, &decode}};
-
-            std::memcpy(event_queue, events, 12);
+            events.insert({{&fetch_ladd_pc}, {&fetch_ladd_zp, &inc_ladd},
+                {&fetch_hadd_zp, &add_y_ladd}, {&fetch_data_abus, &fix_add_skip},
+                {&fetch_data_abus, &adc_acc}, {&fetch_opcode, &decode}};
             break;
     }
 }
@@ -191,36 +182,401 @@ CPU::ADC (address_mode mode) {
 // Perform a bitwise AND on the data and the accumulator
 CPU::AND (address_mode mode) {
 
+    // Add different single-cycle actions to the event queue depending on
+    // the addressing mode
     switch (mode) {
         case IMM:
+            events.insert({{&fetch_data_pc, &and_acc}, {&fetch_opcode, &decode}});
+            break;
+
         case ABS:
+            events.insert({{&fetch_ladd_pc}, {&fetch_hadd_pc},
+                {&fetch_data_abus, &and_acc}, {&fetch_opcode, &decode}});
+            break;
+
         case XABS:
+            events.insert({{&fetch_ladd_pc}, {&fetch_hadd_pc, &add_x_ladd},
+                {&fetch_data_abus, &fix_add_skip}, {&fetch_data_abus, &and_acc},
+                {&fetch_opcode, &decode}});
+            break;
+
         case YABS:
+            events.insert({{&fetch_ladd_pc}, {&fetch_hadd_pc, &add_y_ladd},
+                {&fetch_data_abus, &fix_add_skip}, {&fetch_data_abus, &and_acc},
+                {&fetch_opcode, &decode}};
+            break;
+
         case ZP:
+            events.insert({{&fetch_ladd_pc}, {&fetch_data_zp, &and_acc},
+                {&fetch_opcode, &decode}});
+            break;
+
         case XZP:
+            events.insert({{&fetch_ladd_pc}, {&fetch_ladd_zp, &add_x_ladd},
+                {&fetch_zp_abus, &and_acc}, {&fetch_opcode, &decode}});
+            break;
+
         case XZPI:
+            events.insert({{&fetch_ladd_pc}, {&fetch_ladd_zp, &add_x_ladd},
+                {&fetch_ladd_zp, &inc_ladd}, {&fetch_hadd_zp}, {&fetch_data_abus, &and_acc},
+                {&fetch_opcode, &decode}};
+            break;
+
         case ZPIY:
+            events.insert({{&fetch_ladd_pc}, {&fetch_ladd_zp, &inc_ladd},
+                {&fetch_hadd_zp, &add_y_ladd}, {&fetch_data_abus, &fix_add_skip},
+                {&fetch_data_abus, &and_acc}, {&fetch_opcode, &decode}};
+            break;
     }
+
+}
+
+// Shifts the accumulator (or data at the specified location)
+// left one bit, resetting bit 0 and storing bit 7 in the carry flag
+CPU::ASL(address_mode mode){
+
+    // Add different single-cycle actions to the event queue depending on
+    // the addressing mode
+    switch(mode){
+        case ACC:
+            events.insert(events.end(), {{&asl_acc}, {&fetch_opcode, &decode}});
+            break;
+
+        case ABS:
+            events.insert(events.end(), {{&fetch_ladd_pc}, {&fetch_hadd_pc},
+                {&fetch_data_abus}, {&write_data_abus, &asl_data}, {&write_data_abus},
+                {&fetch_opcode, &decode}});
+            break;
+
+        case XABS:
+            events.insert(events.end(), {{&fetch_ladd_pc}, {&fetch_hadd_pc, &add_xladd},
+                {&fetch_data_abus, &fix_add_skip}, {&fetch_data_abus},
+                {&write_data_abus, &asl_data}, {&write_data_abus},
+                {&fetch_opcode, &decode}});
+            break;
+
+        case ZP:
+            events.insert(events.end(), {{&fetch_ladd_pc}, {&fetch_data_zp},
+                {&write_data_zp, &asl_data}, {&write_data_zp}, {&fetch_opcode, &decode}});
+            break;
+
+        case XIZP:
+            events.insert(events.end(), {{&fetch_ladd_pc}, {&fetch_ladd_zp, &add_x_ladd},
+                {fetch_data_zp}, {&write_data_zp, &asl_data}, {&write_data_zp},
+                {&fetch_opcode, &decode}};
+            break;
+
+    }
+}
+
+
+// Branch if the carry bit is set to 0
+CPU::BCC(address_mode mode){
+    events.insert(events.end(), {{&fetch_data_pc}, {&eval_branch(CC), &add_dbus_pcl},
+        {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode}});
+}
+
+// Branch if the carry bit is set to 1
+CPU::BCS(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc}, {&eval_branch(CS), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+// Branch if the Z flag is set to 1 (i.e. the previous result is zero)
+CPU::BEQ(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc}, {&eval_branch(EQ), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+// Perform a bitwise and operation on the specified location and the
+// accumulator, sets status flags accordingly. Sets the N flag to the
+CPU::BIT(address_mode mode){
+
+    switch (mode ) {
+
+        case ABS:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
+                {&fetch_data_abus, &test_dbus_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 8 * sizeof(void*));
+            break;
+
+        case ZP:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_data_zp, &test_dbus_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 6 * sizeof(void*));
+            break;
+
+
+    }
+
+}
+
+// Branch if the N bit is set to 1, (i.e the previous result is negative)
+CPU::BMI(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc, NULL}, {&eval_branch(MI), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+// Branch if the Z flag is set to 1 (i.e. the previous result is nonzero)
+CPU::BNE(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc, NULL}, {&eval_branch(NE), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+// Branch if the N bit is set to 0, (i.e. the previous result is positive)
+CPU::BPL(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc, NULL}, {&eval_branch(CC), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+// Issue an interrupt, store the next PC address on the stack.
+CPU::BRK(address_mode mode){
+    void(*events[][]) () =
+        {{&fetch_from_pc, NULL}, {&push_pch, NULL}, {&push_pcl, NULL},
+        {&push_status_b, &set_abus(0xFFFE)}, {&fetch_pcl_abus, NULL}, {&fetch_pch, NULL},
+        {&fetch_opcode, NULL};
+
+    std::memcpy(event_queue, events, 14 * sizeof(void*));
+}
+
+// Branch if the V flag is not set (if there is no overflow)
+CPU::BVC(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc, NULL}, {&eval_branch(CC), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+// Branch if the V flag is set (if there is an overflow)
+CPU::BVS(address_mode mode){
+    void (*events[][]) () =
+        {{&fetch_data_pc, NULL}, {&eval_branch(CC), &add_dbus_pcl}, {&fetch_opcode, &fix_pc}, {&fetch_opcode, &decode};
+
+    std::memcpy(event_queue, events, 8 * sizeof(void*));
+}
+
+
+// Increment the X register
+CPU::INX(address_mode mode){
+    void (*events[][]) () =
+            {{&fetch_opcode, &inx}, {&decode, NULL}};
+
+    std::memcpy(event_queue, events, 4);
+    break;
+}
+
+// Set the carry flag to 0
+CPU::CLC(address_mode mode){
+    void (*events[][]) () =
+            {{&clear_carry, NULL}, {&fetch_opcode, &decode}};
+
+    std::memcpy(event_queue, events, 4);
+}
+
+// Set the decimal mode flag to 0
+CPU::CLD(address_mode mode){
+    void (*events[][]) () =
+            {{&clear_decimal, NULL}, {&fetch_opcode, &decode}};
+
+    std::memcpy(event_queue, events, 4);
+}
+
+// Set the interrupt disable mode flag to 0
+CPU::CLI(address_mode mode){
+    void (*events[][]) () =
+            {{&clear_interrupt, NULL}, {&fetch_opcode, &decode}};
+
+    std::memcpy(event_queue, events, 4);
+}
+
+// Set the overflow flag to 0
+CPU::CLV(address_mode mode){
+    void (*events[][]) () =
+            {{&clear_overflow, NULL}, {&fetch_opcode, &decode}};
+
+    std::memcpy(event_queue, events, 4);
+}
+
+// Compare the specified memory location and the accumulator.
+//
+CPU::CMP (address_mode mode) {
+
+    // Add different single-cycle actions to the event queue depending on
+    // the addressing mode
+    switch (mode) {
+        case IMM:
+            void (*events[][]) () =
+                {{&fetch_data_pc, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 4 * sizeof(void*));
+            break;
+
+        case ABS:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
+                {&fetch_data_abus, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 8 * sizeof(void*));
+            break;
+
+        case XABS:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd}, {&fetch_data_abus, &fix_add_skip},
+                {&fetch_data_abus, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 10 * sizeof(void*));
+            break;
+
+        case YABS:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd}, {&fetch_data_abus, &fix_add_skip},
+                {&fetch_data_abus, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 10 * sizeof(void*));
+            break;
+
+        case ZP:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_data_zp, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 6 * sizeof(void*));
+            break;
+
+        case XZP:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_ladd_zp, &add_x_ladd},
+                {&fetch_zp_abus, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 8 * sizeof(void*));
+            break;
+
+        case XZPI:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_ladd_zp, &add_x_ladd}, {&fetch_ladd_zp, &inc_ladd},
+                {&fetch_hadd_zp, NULL}, {&fetch_data_abus, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 12 * sizeof(void*));
+            break;
+
+        case ZPIY:
+            void (*events[][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_ladd_zp, &inc_ladd}, {&fetch_hadd_zp, &add_y_ladd},
+                {&fetch_data_abus, &fix_add_skip}, {&fetch_data_abus, &cmp_acc}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 12 * sizeof(void*));
+            break;
+    }
+}
+
+// Compare register X to the specified memory location and set
+// flags accordingly.
+CPU::CPX (address_mode mode) {
+    switch (mode) {
+
+        case IMM:
+            void (*events [][]) () =
+                {{&fetch_data_pc, &cmp_x}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 4 * sizeof(void*));
+            break;
+
+        case ABS:
+            void (*events [][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
+                {&fetch_data_abus, &cmp_x}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 8 * sizeof(void*));
+            break;
+
+        case ZP:
+            void (*events [][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_data_zp, &cmp_x}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 6 * sizeof(void*));
+            break;
+}
+
+// Compare register Y to the specified memory location and set
+// flags accordingly.
+CPU::CPY (address_mode mode) {
+    switch (mode) {
+
+        case IMM:
+            void (*events [][]) () =
+                {{&fetch_data_pc, &cmp_y}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 4 * sizeof(void*));
+            break;
+
+        case ABS:
+            void (*events [][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
+                {&fetch_data_abus, &cmp_y}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 8 * sizeof(void*));
+            break;
+
+        case ZP:
+            void (*events [][]) () =
+                {{&fetch_ladd_pc, NULL}, {&fetch_data_zp, &cmp_y}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 6 * sizeof(void*));
+            break;
+}
+
+// Decrement the specified memory location by one
+CPU::DEC (address_mode mode) {
+
+    switch (mode) {
+
+        case ABS:
+            void (*events [][]) () =
+                {{&fetch_ladd_pc, NULL}, {fetch_hadd_pc, NULL}, {&fetch_data_abus, NULL},
+                {&write_data_abus, &dec_dbus}, {&write_data_abus, NULL}, {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 12 * sizeof(void*));
+            break;
+
+        case XABS:
+            void (*events [][]) () =
+                {{&fetch_ladd_pc, NULL}, {fetch_hadd_pc, &add_x_ladd}, {&fetch_data_abus, &fix_add},
+                {&fetch_data_abus, NULL}, {&write_data_abus, &dec_dbus}, {&write_data_abus, NULL},
+                {&fetch_opcode, &decode}};
+
+            std::memcpy(event_queue, events, 14 * sizeof(void*));
+            break;
+    }
+}
+
+// Increment the Y register
+CPU::INY (address_mode mode) {
+    events.insert({{&fetch_opcode, &iny}, {&decode, NULL}});
+    break;
 }
 
 // Perform no operation, fetch next opcode
 CPU::NOP (address_mode mode) {
-    switch (mode) {
-        case IMPL:
-            void (*events[][]) () =
-                {{&fetch_opcode, NULL}, {&decode, NULL}};
-
-            std::memcpy(event_queue, events, 4);
-            break;
-    }
+    events.insert({{&fetch_opcode, NULL}, {&decode, NULL}});
+    break;
 }
 
 
 
 // Load an instruction from the given opcode and queue its needed events
 CPU::decode () {
-
-    cur_event = 0;
 
     // NOTE: The 6502 contains multiple addressing modes for
     // many instructions, and as such functions can be
