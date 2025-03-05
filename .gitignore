@@ -1,10 +1,12 @@
 #
 /ROMs
 
-/nes
+/madNES
 
 /CMakeFiles
 
 /CMakeCache.txt
 
 /cmake_install.cmake
+
+/Makefile

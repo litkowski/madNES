@@ -1,140 +1,127 @@
 #ifndef CPU_H
 #define CPU_H
 
-// Class to contain core CPU functionality
+#include <functional>
+#include <queue>
+#include <array>
+
+#include "mappers.hpp"
+
 class CPU {
+	private:
 
-    // All possible addressing modes for each 6502 opcode
-    // KEY: IMPL - Implicit
-    //      ACC - Accumulator
-    //      IMM - Immediate
-    //      ABS - Absolute
-    //      XABS - X-Indexed Absolute
-    //      YABS - Y-Indexed Absolute
-    //      ABSI - Absolute Indirect
-    //      ZP - Zero Page
-    //      XZP - X-Indexed Zero Page
-    //      YZP - Y-Indexed Zero Page
-    //      XZPI - X-Indexed Zero Page Indirect
-    //      ZPIY - Zero Page Indirect Y-Indexed
-    //      REL - Relative
-    enum address_mode {
-        IMPL, ACC, IMM, ABS, XABS, YABS, ABSI, ZP, XZP, YZP, XZPI, ZPIY, REL
+		Cartridge* game;
 
-    };
+		// All possible addressing modes for each 6502 opcode
+		// KEY: IMPL - Implicit
+		//      ACC - Accumulator
+		//      IMM - Immediate
+		//      ABS - Absolute
+		//      XABS - X-Indexed Absolute
+		//      YABS - Y-Indexed Absolute
+		//      ABSI - Absolute Indirect
+		//      ZP - Zero Page
+		//      XZP - X-Indexed Zero Page
+		//      YZP - Y-Indexed Zero Page
+		//      XZPI - X-Indexed Zero Page Indirect
+ 		//      ZPIY - Zero Page Indirect Y-Indexed
+		//      REL - Relative
+		enum address_mode {
+			IMPL, ACC, IMM, ABS, XABS, YABS, ABSI, ZP, XZP, YZP, XZPI, ZPIY, REL
+		};
 
-    // Store
-    struct cycle_action {
-        std::function<void()> first;
-        std::function<void()> second;
-    }
+		// All 6502 registers and buses
+		uint8_t a, x, y, sp, status, opcode, dbus;
+		uint8_t pcl;
+		uint16_t pc, abus;
 
-    // All instruction functions, each one will queue a number of single-cycle actions
-    // NOTE: This will be expanded to include illegal opcodes in the future
-    void ADC (address_mode);
-    void AND (address_mode);
-    void ASL (address_mode);
-    void BCC (address_mode);
-    void BCS (address_mode);
-    void BEQ (address_mode);
-    void BIT (address_mode);
-    void BMI (address_mode);
-    void BNE (address_mode);
-    void BPL (address_mode);
-    void BRK (address_mode);
-    void BVC (address_mode);
-    void BVS (address_mode);
-    void CLC (address_mode);
-    void CLD (address_mode);
-    void CLI (address_mode);
-    void CLV (address_mode);
-    void CMP (address_mode);
-    void CPX (address_mode);
-    void CPY (address_mode);
-    void DEC (address_mode);
-    void DEX (address_mode);
-    void DEY (address_mode);
-    void EOR (address_mode);
-    void INC (address_mode);
-    void INX (address_mode);
-    void INY (address_mode);
-    void JMP (address_mode);
-    void LDA (address_mode);
-    void LDX (address_mode);
-    void LDY (address_mode);
-    void LSR (address_mode);
-    void NOP (address_mode);
-    void ORA (address_mode);
-    void PHA (address_mode);
-    void PHP (address_mode);
-    void PLA (address_mode);
-    void PLP (address_mode);
-    void ROL (address_mode);
-    void ROR (address_mode);
-    void RTI (address_mode);
-    void RTS (address_mode);
-    void SBC (address_mode);
-    void SEC (address_mode);
-    void SED (address_mode);
-    void SEI (address_mode);
-    void STA (address_mode);
-    void STX (address_mode);
-    void STY (address_mode);
-    void TAX (address_mode);
-    void TAY (address_mode);
-    void TSX (address_mode);
-    void TXA (address_mode);
-    void TXS (address_mode);
-    void TYA (address_mode);
+		// Queue to store atomic events in.
+		// NOTE: Each CPU cycle includes two actions, and thus two function
+		// pointers occupy a single space in the queue
+		std::queue<std::array<void (CPU::*) (), 2>> event_queue;
 
-    // Pointer to the combined game and computer memory
-    Mapper memory;
+		void adc_acc ();
+		void add_x_ladd ();
+		void add_y_ladd ();
+		void add_x_zp ();
+		void inc_abus ();
+		void decode ();
+		void fix_add ();
 
-    // 6502 data; accumulator, X and Y registers, stack pointer, status
-    // register, data bus, opcode register, program counter, and address bus
-    uint8_t acc, x, y, sp, status, dbus, opcode;
-    uint16_t pc, abus;
+		void fetch_data_abus ();
+		void fetch_data_pc ();
+		void fetch_ladd_pc ();
+		void fetch_hadd_pc ();
+		void fetch_ladd_abus ();
+		void fetch_hadd_abus ();
+		void fetch_opcode ();
 
-    // Temporary registers to hold address low bytes in
-    uint8_t ladd_temp, pcl_temp;
 
-    uint8_t fetch (uint16_t address);
+		// All instruction functions, each one will queue a number of single-cycle actions
+		// NOTE: This will be expanded to include illegal opcodes in the future
+		void ADC (address_mode mode);
+		void AND (address_mode mode);
+		void ASL (address_mode mode);
+		void BCC (address_mode mode);
+		void BCS (address_mode mode);
+		void BEQ (address_mode mode);
+		void BIT (address_mode mode);
+		void BMI (address_mode mode);
+		void BNE (address_mode mode);
+		void BPL (address_mode mode);
+		void BRK (address_mode mode);
+		void BVC (address_mode mode);
+		void BVS (address_mode mode);
+		void CLC (address_mode mode);
+		void CLD (address_mode mode);
+		void CLI (address_mode mode);
+		void CLV (address_mode mode);
+		void CMP (address_mode mode);
+		void CPX (address_mode mode);
+		void CPY (address_mode mode);
+		void DEC (address_mode mode);
+		void DEX (address_mode mode);
+		void DEY (address_mode mode);
+		void EOR (address_mode mode);
+		void INC (address_mode mode);
+		void INX (address_mode mode);
+		void INY (address_mode mode);
+		void JMP (address_mode mode);
+		void JSR (address_mode mode);
+		void LDA (address_mode mode);
+		void LDX (address_mode mode);
+		void LDY (address_mode mode);
+		void LSR (address_mode mode);
+		void NOP (address_mode mode);
+		void ORA (address_mode mode);
+		void PHA (address_mode mode);
+		void PHP (address_mode mode);
+		void PLA (address_mode mode);
+		void PLP (address_mode mode);
+		void ROL (address_mode mode);
+		void ROR (address_mode mode);
+		void RTI (address_mode mode);
+		void RTS (address_mode mode);
+		void SBC (address_mode mode);
+		void SEC (address_mode mode);
+		void SED (address_mode mode);
+		void SEI (address_mode mode);
+		void STA (address_mode mode);
+		void STX (address_mode mode);
+		void STY (address_mode mode);
+		void TAX (address_mode mode);
+		void TAY (address_mode mode);
+		void TSX (address_mode mode);
+		void TXA (address_mode mode);
+		void TXS (address_mode mode);
+		void TYA (address_mode mode);
 
-    // Single cycle actions that the CPU can take
-    void write ();
 
-    void fetch_opcode ();
-    void fetch_data ();
-    void fetch_x ();
-    void fetch_y ();
-    void fetch_pch ();
-    void fetch_pcl ();
-
-    void fetch_acc ();
-
-    void set_addh ();
-    void set_addl ();
-
-    void adc_acc ();
-    void and_acc ();
-    void asl_acc ();
-    void asl_mem ();
-    void sub_acc ();
-
-    void fetch_zp ();
-    void nop ();
-    void push_pch ();
-    void push_pcl ();
-
-    void decode ();
-
-    // Queue to store cycle events in for the current instruction, with a pointer
-    // to the next event to be executed
-    std::vector<std::function<void()>> events;
-
-    public:
-        CPU(uint8_t* rom);
-        cycle();
+		// Helper function
+		void push_events (std::vector<std::array<void (CPU::*) (), 2>> events);
+	public:
+		CPU (Cartridge* game_cartridge);
+		void cycle ();
 };
 
 #endif

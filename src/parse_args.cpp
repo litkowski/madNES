@@ -43,7 +43,7 @@ struct nes_args parse_nes_args (int argc, char* argv[]) {
 
 	struct argp_option options[] = {
 		{"filename", 'f', "filename", 0, "The path to the desired NES ROM", 0},
-		{"dump", 'd', 0, OPTION_ARG_OPTIONAL, "Print a disassembled version of the given ROM to stdout", 0},
+		{"dump", 'd', 0, OPTION_ARG_OPTIONAL, "Print a disassembled version of the given ROM to stdout: CURRENTLY UNSUPPORTED", 0},
 		{0}
 	};
 

@@ -1,6 +1,8 @@
 #ifndef PARSE_ROM_H
 #define PARSE_ROM_H
 
+#include <string>
+
 enum nes_tv_system {NTSC, PAL, MULTIREGION, DENDY};
 enum nes_console_type {NES, VS_SYSTEM, PLAYCHOICE_10, EXTENDED};
 enum vs_system {RP2C03, RP2C04_0001, RP2C04_0002, RP2C04_0003, RP2C04_0004,

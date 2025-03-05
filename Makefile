@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/daniel/Documents/Projects/NES
+CMAKE_SOURCE_DIR = /home/daniel/Documents/Projects/madNES
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/daniel/Documents/Projects/NES
+CMAKE_BINARY_DIR = /home/daniel/Documents/Projects/madNES
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -87,9 +87,9 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/daniel/Documents/Projects/NES/CMakeFiles /home/daniel/Documents/Projects/NES//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/daniel/Documents/Projects/madNES/CMakeFiles /home/daniel/Documents/Projects/madNES//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/daniel/Documents/Projects/NES/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/daniel/Documents/Projects/madNES/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -117,24 +117,72 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named nes
+# Target rules for targets named madNES
 
 # Build rule for target.
-nes: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 nes
-.PHONY : nes
+madNES: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 madNES
+.PHONY : madNES
 
 # fast build rule for target.
-nes/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/build
-.PHONY : nes/fast
+madNES/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/build
+.PHONY : madNES/fast
+
+src/cpu.o: src/cpu.cpp.o
+.PHONY : src/cpu.o
+
+# target to build an object file
+src/cpu.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/cpu.cpp.o
+.PHONY : src/cpu.cpp.o
+
+src/cpu.i: src/cpu.cpp.i
+.PHONY : src/cpu.i
+
+# target to preprocess a source file
+src/cpu.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/cpu.cpp.i
+.PHONY : src/cpu.cpp.i
+
+src/cpu.s: src/cpu.cpp.s
+.PHONY : src/cpu.s
+
+# target to generate assembly for a file
+src/cpu.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/cpu.cpp.s
+.PHONY : src/cpu.cpp.s
+
+src/game_loop.o: src/game_loop.cpp.o
+.PHONY : src/game_loop.o
+
+# target to build an object file
+src/game_loop.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/game_loop.cpp.o
+.PHONY : src/game_loop.cpp.o
+
+src/game_loop.i: src/game_loop.cpp.i
+.PHONY : src/game_loop.i
+
+# target to preprocess a source file
+src/game_loop.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/game_loop.cpp.i
+.PHONY : src/game_loop.cpp.i
+
+src/game_loop.s: src/game_loop.cpp.s
+.PHONY : src/game_loop.s
+
+# target to generate assembly for a file
+src/game_loop.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/game_loop.cpp.s
+.PHONY : src/game_loop.cpp.s
 
 src/main.o: src/main.cpp.o
 .PHONY : src/main.o
 
 # target to build an object file
 src/main.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/main.cpp.o
 .PHONY : src/main.cpp.o
 
 src/main.i: src/main.cpp.i
@@ -142,7 +190,7 @@ src/main.i: src/main.cpp.i
 
 # target to preprocess a source file
 src/main.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/main.cpp.i
 .PHONY : src/main.cpp.i
 
 src/main.s: src/main.cpp.s
@@ -150,7 +198,7 @@ src/main.s: src/main.cpp.s
 
 # target to generate assembly for a file
 src/main.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/main.cpp.s
 .PHONY : src/main.cpp.s
 
 src/mappers.o: src/mappers.cpp.o
@@ -158,7 +206,7 @@ src/mappers.o: src/mappers.cpp.o
 
 # target to build an object file
 src/mappers.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/mappers.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/mappers.cpp.o
 .PHONY : src/mappers.cpp.o
 
 src/mappers.i: src/mappers.cpp.i
@@ -166,7 +214,7 @@ src/mappers.i: src/mappers.cpp.i
 
 # target to preprocess a source file
 src/mappers.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/mappers.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/mappers.cpp.i
 .PHONY : src/mappers.cpp.i
 
 src/mappers.s: src/mappers.cpp.s
@@ -174,7 +222,7 @@ src/mappers.s: src/mappers.cpp.s
 
 # target to generate assembly for a file
 src/mappers.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/mappers.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/mappers.cpp.s
 .PHONY : src/mappers.cpp.s
 
 src/parse_args.o: src/parse_args.cpp.o
@@ -182,7 +230,7 @@ src/parse_args.o: src/parse_args.cpp.o
 
 # target to build an object file
 src/parse_args.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/parse_args.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/parse_args.cpp.o
 .PHONY : src/parse_args.cpp.o
 
 src/parse_args.i: src/parse_args.cpp.i
@@ -190,7 +238,7 @@ src/parse_args.i: src/parse_args.cpp.i
 
 # target to preprocess a source file
 src/parse_args.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/parse_args.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/parse_args.cpp.i
 .PHONY : src/parse_args.cpp.i
 
 src/parse_args.s: src/parse_args.cpp.s
@@ -198,7 +246,7 @@ src/parse_args.s: src/parse_args.cpp.s
 
 # target to generate assembly for a file
 src/parse_args.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/parse_args.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/parse_args.cpp.s
 .PHONY : src/parse_args.cpp.s
 
 src/parse_rom.o: src/parse_rom.cpp.o
@@ -206,7 +254,7 @@ src/parse_rom.o: src/parse_rom.cpp.o
 
 # target to build an object file
 src/parse_rom.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/parse_rom.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/parse_rom.cpp.o
 .PHONY : src/parse_rom.cpp.o
 
 src/parse_rom.i: src/parse_rom.cpp.i
@@ -214,7 +262,7 @@ src/parse_rom.i: src/parse_rom.cpp.i
 
 # target to preprocess a source file
 src/parse_rom.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/parse_rom.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/parse_rom.cpp.i
 .PHONY : src/parse_rom.cpp.i
 
 src/parse_rom.s: src/parse_rom.cpp.s
@@ -222,7 +270,7 @@ src/parse_rom.s: src/parse_rom.cpp.s
 
 # target to generate assembly for a file
 src/parse_rom.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/nes.dir/build.make CMakeFiles/nes.dir/src/parse_rom.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/madNES.dir/build.make CMakeFiles/madNES.dir/src/parse_rom.cpp.s
 .PHONY : src/parse_rom.cpp.s
 
 # Help Target
@@ -233,7 +281,13 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... nes"
+	@echo "... madNES"
+	@echo "... src/cpu.o"
+	@echo "... src/cpu.i"
+	@echo "... src/cpu.s"
+	@echo "... src/game_loop.o"
+	@echo "... src/game_loop.i"
+	@echo "... src/game_loop.s"
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"

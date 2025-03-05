@@ -3,7 +3,6 @@
 
 #include "parse_rom.hpp"
 
-
 // Parse the given ROM's header according to the iNES format.
 // NOTE: Only the .nes (iNES) format is currently supported, both iNES and iNES 2.0
 struct ines_info parse_rom (std::string filename) {
@@ -16,11 +15,12 @@ struct ines_info parse_rom (std::string filename) {
 		throw std::runtime_error("Given ROM" + filename + "is not of type .nes.");
 	}
 
-	// Open the ROM's filestream and read in its header
+	// Open the ROM's filestream, read in its header, and close it
 	std::ifstream rom;
-	rom.open(filename, std::fstream::in | std::fstream::out);
+	rom.open(filename, std::fstream::in);
 	struct ines_header header;
 	rom.read((char*) &header, 16);
+	rom.close();
 
 	// Ensure that the iNES label is formatted correctly
 	if (header.label != 0x1A53454E) {
@@ -30,8 +30,8 @@ struct ines_info parse_rom (std::string filename) {
 
 	// Extract PRG and CHR ROM sizes
 	struct ines_info rom_info;
-	rom_info.prg_rom_size = header.prg_size;
-	rom_info.chr_rom_size = header.chr_size;
+	rom_info.prg_rom_size = 0x4000 * header.prg_size;
+	rom_info.chr_rom_size = 0x2000 * header.chr_size;
 
 	// Extract mapper index lower bytes
 	rom_info.mapper = (0xF0 & header.flags_6) >> 4;
