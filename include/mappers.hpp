@@ -23,6 +23,7 @@ class NROM : public Cartridge {
 		uint16_t prg_rom_size;
 		uint16_t chr_rom_size;
 		nes_nametable_arrangement nametable_arrangement;
+		~NROM ();
 	public:
 		NROM (struct ines_info, std::string filename);
 		uint8_t cpu_read (uint16_t address);

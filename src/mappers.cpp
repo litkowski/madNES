@@ -183,6 +183,11 @@ void NROM::ppu_write (uint16_t addr, uint8_t data) {
 }
 
 
+NROM::~NROM () {
+}
+
+
+
 // Load the rom with given info and filename into a Cartridge object
 Cartridge* load_rom (std::string filename) {
 

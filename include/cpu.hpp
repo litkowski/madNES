@@ -1,8 +1,16 @@
 #ifndef CPU_H
 #define CPU_H
 
-#include <functional>
-#include <queue>
+#define CARRY_FLAG 0b00000001
+#define ZERO_FLAG 0b00000010
+#define INTERRUPT_FLAG 0b00000100
+#define DECIMAL_FLAG 0b00001000
+#define B_FLAG 0b00010000
+#define EXTRA_FLAG 0b00100000
+#define OVERFLOW_FLAG 0b01000000
+#define NEGATIVE_FLAG 0b10000000
+
+#include <deque>
 #include <array>
 
 #include "mappers.hpp"
@@ -31,22 +39,39 @@ class CPU {
 		};
 
 		// All 6502 registers and buses
-		uint8_t a, x, y, sp, status, opcode, dbus;
+		uint8_t acc, x, y, sp, status, opcode, dbus;
 		uint8_t pcl;
 		uint16_t pc, abus;
 
 		// Queue to store atomic events in.
-		// NOTE: Each CPU cycle includes two actions, and thus two function
+		// NOTE: Each CPU cycle includes a maximum of two actions, and thus two function
 		// pointers occupy a single space in the queue
-		std::queue<std::array<void (CPU::*) (), 2>> event_queue;
+		std::deque<std::array<void (CPU::*) (), 2>> event_queue;
 
 		void adc_acc ();
+		void and_acc ();
+		void asl_acc ();
+		void asl_dbus ();
+
+		void bcc ();
+		void bcs ();
+		void bne ();
+		void beq ();
+		void bpl ();
+		void bmi ();
+		void bvc ();
+		void bvs ();
+
 		void add_x_ladd ();
+		void add_x_ladd_skip ();
 		void add_y_ladd ();
+		void add_y_ladd_skip ();
+		void add_dbus_pcl ();
 		void add_x_zp ();
 		void inc_abus ();
 		void decode ();
 		void fix_add ();
+		void fix_pch ();
 
 		void fetch_data_abus ();
 		void fetch_data_pc ();
@@ -55,7 +80,7 @@ class CPU {
 		void fetch_ladd_abus ();
 		void fetch_hadd_abus ();
 		void fetch_opcode ();
-
+		void write_data_abus ();
 
 		// All instruction functions, each one will queue a number of single-cycle actions
 		// NOTE: This will be expanded to include illegal opcodes in the future
@@ -116,8 +141,7 @@ class CPU {
 		void TXS (address_mode mode);
 		void TYA (address_mode mode);
 
-
-		// Helper function
+		// Helper function; push the given events to the event queue
 		void push_events (std::vector<std::array<void (CPU::*) (), 2>> events);
 	public:
 		CPU (Cartridge* game_cartridge);
