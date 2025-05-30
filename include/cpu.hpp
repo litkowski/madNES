@@ -48,11 +48,14 @@ class CPU {
 		// pointers occupy a single space in the queue
 		std::deque<std::array<void (CPU::*) (), 2>> event_queue;
 
+		void push_events_read (address_mode mode, void (CPU::*func) ());
+		void push_events_read_mod_write (address_mode mode, void (CPU::*func) ());
+		void push_events_write (address_mode mode, void (CPU::*func) ());
+
 		void adc_acc ();
 		void and_acc ();
 		void asl_acc ();
 		void asl_dbus ();
-
 		void bcc ();
 		void bcs ();
 		void bne ();
@@ -61,18 +64,48 @@ class CPU {
 		void bmi ();
 		void bvc ();
 		void bvs ();
+		void bit ();
+		void clc ();
+		void cld ();
+		void cli ();
+		void clv ();
+		void cmp ();
+		void cpx ();
+		void cpy ();
+		void dec ();
+		void dex ();
+		void dey ();
+		void eor ();
+		void inc ();
+		void inx ();
+		void iny ();
+		void lda ();
+		void ldx ();
+		void ldy ();
+		void lsr_acc ();
+		void lsr_dbus ();
+		void ora ();
+		void push_acc ();
+		void pop_acc ();
+		void rol_acc ();
+		void rol_dbus ();
+		void ror_acc ();
+		void ror_dbus ();
+		void sbc ();
+		void sec ();
+		void sed ();
+		void sei ();
+		void sta ();
+		void stx ();
+		void sty ();
+		void tax ();
+		void tay ();
+		void tsx ();
+		void txa ();
+		void txs ();
+		void tya ();
 
-		void add_x_ladd ();
-		void add_x_ladd_skip ();
-		void add_y_ladd ();
-		void add_y_ladd_skip ();
-		void add_dbus_pcl ();
-		void add_x_zp ();
-		void inc_abus ();
-		void decode ();
-		void fix_add ();
-		void fix_pch ();
-
+		void nop ();
 		void fetch_data_abus ();
 		void fetch_data_pc ();
 		void fetch_ladd_pc ();
@@ -81,11 +114,42 @@ class CPU {
 		void fetch_hadd_abus ();
 		void fetch_opcode ();
 		void write_data_abus ();
+		void add_dbus_pcl ();
+		void add_x_ladd ();
+		void add_x_ladd_skip ();
+		void add_y_ladd ();
+		void add_y_ladd_skip ();
+		void add_x_zp ();
+		void add_y_zp ();
+		void fix_add ();
+		void fix_pch ();
+		void inc_abus ();
+		void dec_sp ();
+		void inc_sp ();
+		void push_pch ();
+		void pop_pch ();
+		void push_pcl ();
+		void pop_pcl ();
+		void push_p ();
+		void pop_p ();
+		void fetch_pcl_irq ();
+		void fetch_pch_irq ();
+		void fetch_pcl_nmi ();
+		void fetch_pch_nmi ();
+		void copy_dbus_pcl ();
+		void fetch_pc_to_pch ();
+		void fetch_abus_to_pch ();
+		void inc_pc ();
+		void inc_ladd_no_fix ();
+		void set_zero_and_neg (uint8_t result);
+
+		void decode ();
 
 		// All instruction functions, each one will queue a number of single-cycle actions
 		// NOTE: This will be expanded to include illegal opcodes in the future
 		void ADC (address_mode mode);
 		void AND (address_mode mode);
+		void ASLA(address_mode mode);
 		void ASL (address_mode mode);
 		void BCC (address_mode mode);
 		void BCS (address_mode mode);
@@ -116,6 +180,7 @@ class CPU {
 		void LDA (address_mode mode);
 		void LDX (address_mode mode);
 		void LDY (address_mode mode);
+		void LSRA(address_mode mode);
 		void LSR (address_mode mode);
 		void NOP (address_mode mode);
 		void ORA (address_mode mode);
@@ -123,7 +188,9 @@ class CPU {
 		void PHP (address_mode mode);
 		void PLA (address_mode mode);
 		void PLP (address_mode mode);
+		void ROLA(address_mode mode);
 		void ROL (address_mode mode);
+		void RORA(address_mode mode);
 		void ROR (address_mode mode);
 		void RTI (address_mode mode);
 		void RTS (address_mode mode);

@@ -18,7 +18,6 @@ void CPU::push_events (std::vector<std::array<void (CPU::*) (), 2>> events) {
 	for (int i = 0; i < events.size(); i++) {
 		event_queue.push_back(events[i]);
 	}
-	event_queue.push_back({&CPU::fetch_opcode, &CPU::decode});
 }
 
 /*
@@ -253,7 +252,7 @@ void CPU::push_p () {
 
 // Pop the status register from the stack
 void CPU::pop_p () {
-    p = game->cpu_read(sp - 1);
+    status = game->cpu_read(sp - 1);
 }
 
 // Fetch the low byte of the IRQ interrupt handler
@@ -510,6 +509,7 @@ void CPU::cpx () {
 
     // Check for zero and negative results
     set_zero_and_neg(result);
+}
 
 // Compare the value of the specified location with the Y register, set the status flags accordingly
 void CPU::cpy () {
@@ -581,6 +581,12 @@ void CPU::ldx () {
     set_zero_and_neg(x);
 }
 
+// Load Y with the memory in dbus, set flags accordingly
+void CPU::ldy () {
+    y = dbus;
+    set_zero_and_neg(y);
+}
+
 // Shift the accumulator right one bit. Store the low bit in the carry flag.
 // Reset the negative flag.
 void CPU::lsr_acc () {
@@ -603,7 +609,7 @@ void CPU::lsr_acc () {
 
 // Shift the dbus right one bit. Store the low bit in the carry flag.
 // Reset the negative flag.
-void CPU::lsr () {
+void CPU::lsr_dbus () {
     if (dbus & 0x01) {
         status |= CARRY_FLAG;
     } else {
@@ -658,7 +664,7 @@ void CPU::rol_acc () {
 
 // Rotate the dbus left; i.e. store the 7th bit in the carry flag,
 // store the initial carry flag in the 0th bit, and shift left one bit.
-void CPU::rol_acc () {
+void CPU::rol_dbus () {
     uint8_t temp_status = status;
 
     if (dbus & 0b10000000) {
@@ -796,14 +802,14 @@ void CPU::txs () {
 
 // Transfer Y to acc
 void CPU::tya () {
-    acc = Y;
+    acc = y;
     set_zero_and_neg(acc);
 }
 
 /* NOTE: Helper functions for generic instruction types begin here */
 
 // Generic read type function
-void push_events_read (address_mode mode, void (CPU::*func) ()) {
+void CPU::push_events_read (address_mode mode, void (CPU::*func) ()) {
     switch (mode) {
         case IMM:
 			push_events({{&CPU::fetch_data_pc, func}});
@@ -845,7 +851,7 @@ void push_events_read (address_mode mode, void (CPU::*func) ()) {
 }
 
 // Generic read-modify-write type function
-void push_events_read_mod_write (address_mode mode, void (CPU::*func) ()) {
+void CPU::push_events_read_mod_write (address_mode mode, void (CPU::*func) ()) {
     switch (mode) {
         case ABS:
             push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL},
@@ -869,16 +875,16 @@ void push_events_read_mod_write (address_mode mode, void (CPU::*func) ()) {
 }
 
 // Generic simple write type functin
-void push_events_write (address_mode mode, void (CPU::*func) ()) {
+void CPU::push_events_write (address_mode mode, void (CPU::*func) ()) {
     switch (mode) {
         case ABS:
             push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL}, {func, NULL}});
             break;
         case XABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_x_ladd}, {&fetch_data_abus, &CPU::fix_add}, {func, NULL}});
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_x_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add}, {func, NULL}});
             break;
         case YABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_y_ladd}, {&fetch_data_abus, &CPU::fix_add}, {func, NULL}});
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_y_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add}, {func, NULL}});
             break;
         case ZP:
             push_events({{&CPU::fetch_ladd_pc, NULL}, {func, NULL}});
@@ -956,17 +962,19 @@ void CPU::BVS (address_mode mode) {
 
 // AND the memory location with the accumulator, but do not save the result
 void CPU::BIT (address_mode mode) {
-    case ABS:
-        push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::bit_acc}});
-    case ZP:
-        push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::bit_acc}});
+    switch (mode) {
+        case ABS:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::bit}});
+        case ZP:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::bit}});
+    }
 }
 
 // Undergo a voluntary interrupt. Pushes PC to the stack first, then status,
 // and finally reads the handler address from 0xFFFE - 0xFFFF
 void CPU::BRK (address_mode mode) {
     push_events({{&CPU::fetch_opcode, NULL}, {&CPU::push_pch, &CPU::dec_sp}, {&CPU::push_pcl, &CPU::dec_sp},
-                {&CPU::push_p, &CPU::dec_sp}, {&CPU::fetch_pcl_irq, NULL}, {&CPU::fetch_pch_irq, NULL});
+                {&CPU::push_p, &CPU::dec_sp}, {&CPU::fetch_pcl_irq, NULL}, {&CPU::fetch_pch_irq, NULL}});
 }
 
 // Clear the carry bit
@@ -976,17 +984,17 @@ void CPU::CLC (address_mode mode) {
 
 // Clear the decimal flag. NOTE: The decimal mode is disabled on the NES
 void CPU::CLD (address_mode mode) {
-    push_events({&CPU::fetch_ladd_pc, &CPU::cld});
+    push_events({{&CPU::fetch_ladd_pc, &CPU::cld}});
 }
 
 // Clear the interrupt disable flag
 void CPU::CLI (address_mode mode) {
-    push_events({&CPU::fetch_ladd_pc, &CPU::cli});
+    push_events({{&CPU::fetch_ladd_pc, &CPU::cli}});
 }
 
 // Clear the overflow flag
 void CPU::CLV (address_mode mode) {
-    push_events({&CPU::fetch_ladd_pc, &CPU::clv});
+    push_events({{&CPU::fetch_ladd_pc, &CPU::clv}});
 }
 
 // Compare the value of the memory location with the accumulator
@@ -1046,13 +1054,13 @@ void CPU::JMP (address_mode mode) {
             push_events({{&CPU::fetch_data_pc, NULL}, {&CPU::fetch_pc_to_pch, &CPU::copy_dbus_pcl}});
         case ABSI:
             push_events({{&CPU::fetch_ladd_pc, &CPU::inc_pc}, {&CPU::fetch_hadd_pc, &CPU::inc_pc},
-                {&CPU::fetch_data_abus, &CPU::inc_ladd_no_fix}, {&CPU::copy_dbus_pcl, &CPU::fetch_abus_to_pch}})
+                {&CPU::fetch_data_abus, &CPU::inc_ladd_no_fix}, {&CPU::copy_dbus_pcl, &CPU::fetch_abus_to_pch}});
     }
 }
 
 // Jump to subroutine; i.e. set PC to a new location and push current state on the stack
 void CPU::JSR (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, NULL}, {&CPU::nop, NULL}, {&CPU::push_pch, &CPU::dec_sp}
+    push_events({{&CPU::fetch_data_pc, NULL}, {&CPU::nop, NULL}, {&CPU::push_pch, &CPU::dec_sp},
         {&CPU::push_pcl, &CPU::dec_sp}, {&CPU::fetch_pc_to_pch, &CPU::copy_dbus_pcl}});
 }
 
@@ -1114,7 +1122,7 @@ void CPU::PLP (address_mode mode) {
 // NOTE: Rotation is specified in the rol_acc/dbus and ror_acc/dbus functions
 // Rotate the accumulator left.
 void CPU::ROLA (address_mode mode) {
-    push_events({&CPU::rol_acc, NULL});
+    push_events({{&CPU::rol_acc, NULL}});
 }
 
 // Rotate the memory address left
@@ -1124,7 +1132,7 @@ void CPU::ROL (address_mode mode) {
 
 // Rotate the accumulator right
 void CPU::RORA (address_mode mode) {
-    push_events({&CPU::ror_acc, NULL});
+    push_events({{&CPU::ror_acc, NULL}});
 }
 
 // Rotate the memory address right
@@ -1133,7 +1141,7 @@ void CPU::ROR (address_mode mode) {
 }
 
 // Return from interrupt. Restores all status flags
-void CPU::RTI () {
+void CPU::RTI (address_mode mode) {
     push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_p, &CPU::inc_sp},
         {&CPU::pop_pcl, &CPU::inc_sp}, {&CPU::pop_pch, NULL}});
 }
@@ -1146,22 +1154,22 @@ void CPU::RTS (address_mode mode) {
 
 // Subtract the value in memory from the accumulator, store in accumulator
 void CPU::SBC (address_mode mode) {
-    push_events_read(mode, CPU::sbc);
+    push_events_read(mode, &CPU::sbc);
 }
 
 // Set the carry flag
 void CPU::SEC (address_mode mode) {
-    push_events({{&CPU::sec, NULL});
+    push_events({{&CPU::sec, NULL}});
 }
 
 // Set the decimal mode flag
 void CPU::SED (address_mode mode) {
-    push_events({{&CPU::sed, NULL});
+    push_events({{&CPU::sed, NULL}});
 }
 
 // Set the interrupt disable flag
 void CPU::SEI (address_mode mode) {
-    push_events({{&CPU::sei, NULL});
+    push_events({{&CPU::sei, NULL}});
 }
 
 // Store the value of the accumulator in the memory address
