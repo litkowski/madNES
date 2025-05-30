@@ -55,6 +55,7 @@ void CPU::fetch_ladd_pc () {
 	dbus = game->cpu_read(pc);
 	abus = 0;
 	abus |= dbus;
+    pc++;
 }
 
 // Fetch the high address of the address bus
@@ -62,6 +63,7 @@ void CPU::fetch_hadd_pc () {
 	dbus = game->cpu_read(pc);
 	abus &= 0x00FF;
 	abus |= (dbus << 8);
+    pc++;
 }
 
 // Fetch the data at the abus into the low byte of the address bus
@@ -227,9 +229,10 @@ void CPU::push_pch () {
     game->cpu_write(sp, (uint8_t) (pc & 0xFF00) >> 8);
 }
 
-// Pop the high byte of PC from the stack TODO
+// Pop the high byte of PC from the stack
 void CPU::pop_pch () {
-
+    pc &= 0x00FF;
+    pc |= game->cpu_read(sp-1) << 8;
 }
 
 // Push the low byte of PC onto the stack
@@ -237,9 +240,10 @@ void CPU::push_pcl () {
     game->cpu_write(sp, (uint8_t) (pc & 0x00FF));
 }
 
-// Pop the low byte of PC from the stack TODO
+// Pop the low byte of PC from the stack
 void CPU::pop_pcl () {
-
+    pc &= 0xFF00;
+    pc |= game->cpu_read(sp-1);
 }
 
 // Push the status register to the stack with the B flag set
@@ -709,24 +713,91 @@ void CPU::ror_dbus () {
     }
 }
 
-// TODO
+// Subtract the value in the dbus from the accumulator.
 void CPU::sbc () {
+    int8_t result = ((int8_t) acc - (int8_t) dbus);
+    int16_t real_result = ((int16_t) acc) - ((int16_t) dbus);
 
+    if (result >= 0) {
+        status |= CARRY_FLAG;
+    } else {
+        status &= ~CARRY_FLAG;
+    }
+
+    if (result < real_result || result > real_result) {
+        status |= OVERFLOW_FLAG;
+    } else {
+        status &= ~OVERFLOW_FLAG;
+    }
+
+    set_zero_and_neg(result);
+    acc = (uint8_t) result;
 }
 
-// TODO
+// Set the carry flag
 void CPU::sec () {
-
+    status |= CARRY_FLAG;
 }
 
-// TODO
+// Set the decimal flag
 void CPU::sed () {
-
+    status |= DECIMAL_FLAG;
 }
 
-// TODO
+// Set the interrupt disable flag
 void CPU::sei () {
+    status |= INTERRUPT_FLAG;
+}
 
+// Write the accumulator to the abus location
+void CPU::sta () {
+    game->cpu_write(abus, acc);
+}
+
+// Write X to the abus location
+void CPU::stx () {
+    game->cpu_write(abus, x);
+}
+
+// Write Y to the abus location
+void CPU::sty () {
+    game->cpu_write(abus, y);
+}
+
+// Transfer acc to X
+void CPU::tax () {
+    x = acc;
+    set_zero_and_neg(x);
+}
+
+// Transfer acc to Y
+void CPU::tay () {
+    y = acc;
+    set_zero_and_neg(y);
+}
+
+// Transfer SP to X
+void CPU::tsx () {
+    x = sp;
+    set_zero_and_neg(x);
+}
+
+// Transfer X to acc
+void CPU::txa () {
+    acc = x;
+    set_zero_and_neg(acc);
+}
+
+// Transfer X to SP
+void CPU::txs () {
+    sp = x;
+    set_zero_and_neg(sp);
+}
+
+// Transfer Y to acc
+void CPU::tya () {
+    acc = Y;
+    set_zero_and_neg(acc);
 }
 
 /* NOTE: Helper functions for generic instruction types begin here */
@@ -764,10 +835,12 @@ void push_events_read (address_mode mode, void (CPU::*func) ()) {
 			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::add_x_zp},
 				{&CPU::fetch_ladd_abus, &CPU::inc_abus}, {&CPU::fetch_hadd_abus, NULL},
 				{&CPU::fetch_data_abus, func}});
+            break;
 		case ZPIY:
 			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::inc_abus},
-				{&CPU::fetch_hadd_abus, &CPU::add_x_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add},
+				{&CPU::fetch_hadd_abus, &CPU::add_x_ladd_skip}, {&CPU::fetch_data_abus, &CPU::fix_add},
 				{&CPU::fetch_data_abus, func}});
+            break;
     }
 }
 
@@ -789,9 +862,39 @@ void push_events_read_mod_write (address_mode mode, void (CPU::*func) ()) {
                 {&CPU::write_data_abus, func}, {&CPU::write_data_abus, NULL}});
             break;
         case XZP:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_x_zp},
-                {&CPU::fetch_data_abus, NULL}, {&CPU::write_data_abus, func},
-                {&CPU::write_data_abus, NULL}});
+			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_x_zp},
+				{&CPU::fetch_data_abus, func}});
+			break;
+    }
+}
+
+// Generic simple write type functin
+void push_events_write (address_mode mode, void (CPU::*func) ()) {
+    switch (mode) {
+        case ABS:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL}, {func, NULL}});
+            break;
+        case XABS:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_x_ladd}, {&fetch_data_abus, &CPU::fix_add}, {func, NULL}});
+            break;
+        case YABS:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_y_ladd}, {&fetch_data_abus, &CPU::fix_add}, {func, NULL}});
+            break;
+        case ZP:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {func, NULL}});
+            break;
+        case XZP:
+            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_x_zp}, {func, NULL}});
+            break;
+        case XZPI:
+			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::add_x_zp},
+				{&CPU::fetch_ladd_abus, &CPU::inc_abus}, {&CPU::fetch_hadd_abus, NULL},
+                {func, NULL}});
+            break;
+        case ZPIY:
+			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::inc_abus},
+				{&CPU::fetch_hadd_abus, &CPU::add_x_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add},
+				{func, NULL}});
             break;
     }
 }
@@ -1029,16 +1132,21 @@ void CPU::ROR (address_mode mode) {
     push_events_read_mod_write(mode, &CPU::ror_dbus);
 }
 
-// Return from interrupt. Restores all status flags TODO
+// Return from interrupt. Restores all status flags
 void CPU::RTI () {
-
+    push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_p, &CPU::inc_sp},
+        {&CPU::pop_pcl, &CPU::inc_sp}, {&CPU::pop_pch, NULL}});
 }
 
-// Return from subroutine. Does not restore flags, simply pops PC from the stack TODO
+// Return from subroutine. Does not restore flags, simply pops PC from the stack
 void CPU::RTS (address_mode mode) {
+    push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_pcl, &CPU::inc_sp},
+        {&CPU::pop_pch, NULL}, {&CPU::inc_pc, NULL}});
 }
 
+// Subtract the value in memory from the accumulator, store in accumulator
 void CPU::SBC (address_mode mode) {
+    push_events_read(mode, CPU::sbc);
 }
 
 // Set the carry flag
@@ -1056,31 +1164,49 @@ void CPU::SEI (address_mode mode) {
     push_events({{&CPU::sei, NULL});
 }
 
+// Store the value of the accumulator in the memory address
 void CPU::STA (address_mode mode) {
+    push_events_write(mode, &CPU::sta);
 }
 
+// Store X in the memory address
 void CPU::STX (address_mode mode) {
+    push_events_write(mode, &CPU::stx);
 }
 
+// Store Y in the memory address
 void CPU::STY (address_mode mode) {
+    push_events_write(mode, &CPU::sty);
 }
 
+// Transfer the accumulator to X
 void CPU::TAX (address_mode mode) {
+    push_events({{&CPU::tax, NULL}});
 }
 
+// Transfer the accumulator to Y
 void CPU::TAY (address_mode mode) {
+    push_events({{&CPU::tay, NULL}});
 }
 
+// Transfer SP to X
 void CPU::TSX (address_mode mode) {
+    push_events({{&CPU::tsx, NULL}});
 }
 
+// Transfer X to the accumulator
 void CPU::TXA (address_mode mode) {
+    push_events({{&CPU::txa, NULL}});
 }
 
+// Transfer X to the stack pointer
 void CPU::TXS (address_mode mode) {
+    push_events({{&CPU::txs, NULL}});
 }
 
+// Transfer Y to the accumulator
 void CPU::TYA (address_mode mode) {
+    push_events({{&CPU::tya, NULL}});
 }
 
 
