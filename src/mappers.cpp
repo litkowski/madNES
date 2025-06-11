@@ -9,7 +9,7 @@ NROM::NROM (struct ines_info rom_info, std::string filename) {
 
     // Initialize and zero out memory
     cpu_memory = std::vector<uint8_t>(0x10000, 0);
-    ppu_memory = std::vector<uint8_t>(0x2000, 0);
+    ppu_memory = std::vector<uint8_t>(0x4000, 0);
 
     // Copy PRG RAM and ROM sizes, as well as CHR RAM size
     prg_ram_size = rom_info.prg_ram_size;
@@ -135,7 +135,7 @@ void NROM::cpu_write (uint16_t addr, uint8_t data) {
     } else if (addr <= 0x7FFF) {
         cpu_memory[addr] = data;
     } else if (addr <= 0xFFFF) {
-        cpu_memory[addr + ((addr - 0x8000) % prg_rom_size)] = data;
+        cpu_memory[0x8000 + ((addr - 0x8000) % prg_rom_size)] = data;
     }
 
 }

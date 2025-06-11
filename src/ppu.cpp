@@ -1,6 +1,8 @@
 #include "cpu.hpp"
 #include "ppu.hpp"
+#include "graphics.hpp"
 #include <cstring>
+#include <iostream>
 
 // PPUCTRL flags
 #define NAMETABLE_CTRL 0b00000011
@@ -61,6 +63,8 @@ uint8_t w;
 // NOTE: May not need to be used, higher level emulation may suffice
 // uint8_t x;
 
+int frames;
+
 struct sprite oam[64];
 
 // Current cycle in the frame
@@ -79,6 +83,7 @@ void Init_PPU (Cartridge* mapper) {
 	v = t = 0;
 	w = 0;
 	cycles_left = 0;
+	frames = 0;
 
 	// Initialize cartridge
 	game = mapper;
@@ -131,11 +136,9 @@ void render_sprite (struct sprite sprite) {
 	// Set the pattern table index
 	uint16_t pattern_table_index;
 	if (PPUCTRL & SPRITE_SIZE) {
-
 		// Set the index for an 8x16 sprite
 		pattern_table_index = (0x1000 * (sprite.tile_index & 0b1)) + ((sprite.tile_index & ~ 0b1) << 4);
 	} else {
-
 		// Set the index for an 8x8 sprite
 		pattern_table_index = (((PPUCTRL & SPRITE_PATTERN) >> 3) * 0x1000) | (sprite.tile_index << 4);
 	}
@@ -288,6 +291,19 @@ void render_frame () {
 	}
 }
 
+// Copy a page of memory from the CPU's memory space to PPU OAM
+void copy_oamdma (uint8_t address) {
+
+	uint8_t* oam_raw = (uint8_t*) oam;
+
+	// Iterate through all 256 bytes, copying to OAM
+	for (int i = 0; i < 256; i++) {
+		oam_raw[i] = game->cpu_read(address + i);
+	}
+
+	signal_oamdma();
+}
+
 // Modify the CPU memory-mapped registers of the PPU
 void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 	switch (addr) {
@@ -301,7 +317,10 @@ void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 			OAMADDR = data;
 			break;
 		case 0x4:
+			// NOTE: May be memory unsafe
 			OAMDATA = data;
+			((uint8_t*) oam)[OAMADDR] = data;
+			OAMADDR++;
 			break;
 		case 0x5:
 			PPUSCROLL &= (~(0xF << v));
@@ -318,6 +337,7 @@ void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 			break;
 		case 0x14:
 			OAMDMA = data;
+			// copy_oamdma(data);
 			break;
 	}
 }
@@ -325,30 +345,32 @@ void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 // Modify the CPU memory-mapped registers of the PPU
 uint8_t read_ppu_from_cpu (uint8_t addr) {
 	switch (addr) {
-		case 0x2:
-			return PPUSTATUS;
-			break;
+		case 0x2: {
+			uint8_t old = PPUSTATUS;
+			PPUSTATUS &= ~VBLANK_ACTIVE;
+			return old;
+		}
 		case 0x4:
 			return OAMDATA;
-			break;
 		case 0x7:
 			return PPUDATA;
-			break;
 	}
 	return 0;
 }
 
 // Simulate one cycle of the PPU. If it's time to enter vblank or render
 // a new frame, then do so.
-// TODO: Sleep for a 60th of a second after rendering a frame.
 void cycle_ppu () {
 	if (cycles_left == 0) {
 		if (PPUSTATUS & VBLANK_ACTIVE) {
-			signal_nmi();
+			// signal_nmi();
 			PPUSTATUS |= VBLANK_ACTIVE;
 			cycles_left = 7140;
 		} else {
+			frames++;
+			std::cout << "Frames rendered: " << frames << "\n";
 			render_frame();
+			push_frame_to_screen ();
 			PPUSTATUS &= ~VBLANK_ACTIVE;
 			cycles_left = 81940;
 		}

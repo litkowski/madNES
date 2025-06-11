@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 project(NES VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,9 @@ set(SOURCES
 	include/graphics.hpp
 )
 
+find_package(SDL2 REQUIRED)
+
 add_executable(madNES ${SOURCES})
 
+target_link_libraries(madNES PRIVATE SDL2::SDL2)
 target_include_directories(madNES PRIVATE include)

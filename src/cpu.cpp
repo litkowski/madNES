@@ -1,6 +1,7 @@
 #include <deque>
 #include <array>
-
+#include <iostream>
+#include <fstream>
 #include "cpu.hpp"
 
 #define CARRY_FLAG 0b00000001
@@ -11,6 +12,9 @@
 #define EXTRA_FLAG 0b00100000
 #define OVERFLOW_FLAG 0b01000000
 #define NEGATIVE_FLAG 0b10000000
+
+// Log
+std::ofstream log;
 
 // Mapper
 Cartridge* game;
@@ -223,6 +227,8 @@ void Init_CPU (Cartridge* mapper) {
 
     // Start the CPU at the first instruction
     push_events({});
+
+    log.open("./log.txt", std::ios::trunc);
 }
 
 // Helper function to push a range of atomic operations to the event queue
@@ -240,13 +246,14 @@ void push_events (std::vector<std::array<void (*) (), 2>> events) {
  */
  void cycle_cpu () {
 
-    (*event_queue.front()[0])();
-
-    if (event_queue.front()[1] != NULL) {
-        (*event_queue.front()[1])();
-    }
-
+    std::array<void (*) (), 2> functions =  event_queue.front();
     event_queue.pop_front();
+
+    (*functions[0])();
+
+    if (functions[1] != NULL) {
+        (*functions[1])();
+    }
 }
 
 // Set the processor to start an interrupt after the current instuction finishes
@@ -255,6 +262,14 @@ void signal_nmi () {
     event_queue.pop_back();
     push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
                 {&push_p_nmi, &dec_sp}, {&fetch_pcl_nmi, NULL}, {&fetch_pch_nmi, NULL}});
+}
+
+// Signal to the CPU to wait until OAMDMA is finished
+// TODO: This should take either 513 or 514 cycles, currently only supports 513
+void signal_oamdma () {
+    for (int i = 0; i < 513; i++) {
+        event_queue.push_front({&nop, NULL});
+    }
 }
 
 // Do nothing
@@ -490,7 +505,8 @@ void fetch_pcl_irq  () {
 
 // Fetch the high byte of the IRQ interrupt handler
 void fetch_pch_irq () {
-    dbus = game->cpu_read(0xFFFF);
+    pc = 0;
+    pc = (game->cpu_read(0xFFFF) << 8) | dbus;
 }
 
 // Fetch the low byte of the NMI interrupt handler
@@ -624,56 +640,48 @@ void asl_dbus () {
  */
 void bcc () {
     if (!(status & CARRY_FLAG)) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bcs () {
     if (status & CARRY_FLAG) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void beq () {
     if (status & ZERO_FLAG) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bmi () {
     if (status & NEGATIVE_FLAG) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bne () {
     if (!(status & ZERO_FLAG)) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bpl () {
     if (!(status & ZERO_FLAG)) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bvc () {
     if (!(status & OVERFLOW_FLAG)) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bvs () {
     if (status & OVERFLOW_FLAG) {
-        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
@@ -1145,6 +1153,7 @@ void push_events_write (address_mode mode, void (*func) ()) {
 
 // Add the data, as specified through addressing, to the accumulator
 void ADC (address_mode mode) {
+    log << "ADC\n";
     push_events_read(mode, &adc_acc);
 }
 
@@ -1496,7 +1505,7 @@ void decode () {
 
         case 0x10:  BPL(REL);   break;
 
-        case 0x00:  BRK(IMPL);  break;
+        case 0x00:  BRK(IMPL); std::cout << "BRK";  break;
 
         case 0x50:  BVC(REL);   break;
 

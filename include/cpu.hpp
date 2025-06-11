@@ -6,5 +6,6 @@
 void Init_CPU (Cartridge* game_cartridge);
 void cycle_cpu ();
 void signal_nmi ();
+void signal_oamdma ();
 
 #endif
