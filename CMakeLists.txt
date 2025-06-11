@@ -12,9 +12,8 @@ set(SOURCES
 	src/parse_args.cpp
 	src/game_loop.cpp
 	src/cpu.cpp
-	# src/apu.cpp
-	# src/cpu.cpp
-	# src/ppu.cpp
+	src/graphics.cpp
+	src/ppu.cpp
 
 	include/main.hpp
 	include/parse_rom.hpp
@@ -22,9 +21,8 @@ set(SOURCES
 	include/parse_args.hpp
 	include/game_loop.hpp
 	include/cpu.hpp
-	# src/apu.hpp
-	# src/cpu.hpp
-	# src/ppu.hpp
+	include/ppu.hpp
+	include/graphics.hpp
 )
 
 add_executable(madNES ${SOURCES})

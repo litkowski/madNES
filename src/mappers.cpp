@@ -2,12 +2,13 @@
 #include <fstream>
 
 #include "mappers.hpp"
+#include "ppu.hpp"
 
 // Construct an NROM Cartridge object using iNES info
 NROM::NROM (struct ines_info rom_info, std::string filename) {
 
     // Initialize and zero out memory
-    cpu_memory = std::vector<uint8_t>(0xFFFF, 0);
+    cpu_memory = std::vector<uint8_t>(0x10000, 0);
     ppu_memory = std::vector<uint8_t>(0x2000, 0);
 
     // Copy PRG RAM and ROM sizes, as well as CHR RAM size
@@ -65,7 +66,7 @@ uint8_t NROM::cpu_read (uint16_t addr) {
     } else if (addr <= 0x7FFF) {
         return cpu_memory[addr];
     } else if (addr <= 0xFFFF) {
-        return cpu_memory[addr + ((addr - 0x8000) % prg_rom_size)];
+        return cpu_memory[0x8000 + ((addr - 0x8000) % prg_rom_size)];
     }
 
 }

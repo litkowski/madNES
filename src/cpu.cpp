@@ -1,56 +1,279 @@
+#include <deque>
+#include <array>
+
 #include "cpu.hpp"
 
-CPU::CPU (Cartridge* game) {
+#define CARRY_FLAG 0b00000001
+#define ZERO_FLAG 0b00000010
+#define INTERRUPT_FLAG 0b00000100
+#define DECIMAL_FLAG 0b00001000
+#define B_FLAG 0b00010000
+#define EXTRA_FLAG 0b00100000
+#define OVERFLOW_FLAG 0b01000000
+#define NEGATIVE_FLAG 0b10000000
 
-	this->game = game;
+// Mapper
+Cartridge* game;
+
+// All 6502 registers and buses
+uint8_t acc, x, y, sp, status, opcode, dbus;
+uint8_t pcl;
+uint16_t pc, abus;
+
+// All possible addressing modes for each 6502 opcode
+// KEY: IMPL - Implicit
+//      ACC - Accumulator
+//      IMM - Immediate
+//      ABS - Absolute
+//      XABS - X-Indexed Absolute
+//      YABS - Y-Indexed Absolute
+//      ABSI - Absolute Indirect
+//      ZP - Zero Page
+//      XZP - X-Indexed Zero Page
+//      YZP - Y-Indexed Zero Page
+//      XZPI - X-Indexed Zero Page Indirect
+//      ZPIY - Zero Page Indirect Y-Indexed
+//      REL - Relative
+enum address_mode {
+	IMPL, ACC, IMM, ABS, XABS, YABS, ABSI, ZP, XZP, YZP, XZPI, ZPIY, REL
+};
+
+
+void push_events_read (address_mode mode, void (*func) ());
+void push_events_read_mod_write (address_mode mode, void (*func) ());
+void push_events_write (address_mode mode, void (*func) ());
+
+void adc_acc ();
+void and_acc ();
+void asl_acc ();
+void asl_dbus ();
+void bcc ();
+void bcs ();
+void bne ();
+void beq ();
+void bpl ();
+void bmi ();
+void bvc ();
+void bvs ();
+void bit ();
+void clc ();
+void cld ();
+void cli ();
+void clv ();
+void cmp ();
+void cpx ();
+void cpy ();
+void dec ();
+void dex ();
+void dey ();
+void eor ();
+void inc ();
+void inx ();
+void iny ();
+void lda ();
+void ldx ();
+void ldy ();
+void lsr_acc ();
+void lsr_dbus ();
+void ora ();
+void push_acc ();
+void pop_acc ();
+void rol_acc ();
+void rol_dbus ();
+void ror_acc ();
+void ror_dbus ();
+void sbc ();
+void sec ();
+void sed ();
+void sei ();
+void sta ();
+void stx ();
+void sty ();
+void tax ();
+void tay ();
+void tsx ();
+void txa ();
+void txs ();
+void tya ();
+
+void nop ();
+void fetch_data_abus ();
+void fetch_data_pc ();
+void fetch_ladd_pc ();
+void fetch_hadd_pc ();
+void fetch_ladd_abus ();
+void fetch_hadd_abus ();
+void fetch_opcode ();
+void write_data_abus ();
+void add_dbus_pcl ();
+void add_x_ladd ();
+void add_x_ladd_skip ();
+void add_y_ladd ();
+void add_y_ladd_skip ();
+void add_x_zp ();
+void add_y_zp ();
+void fix_add ();
+void fix_pch ();
+void inc_abus ();
+void dec_sp ();
+void inc_sp ();
+void push_pch ();
+void pop_pch ();
+void push_pcl ();
+void pop_pcl ();
+void push_p_irq ();
+void push_p_nmi ();
+void pop_p ();
+void fetch_pcl_irq ();
+void fetch_pch_irq ();
+void fetch_pcl_nmi ();
+void fetch_pch_nmi ();
+void copy_dbus_pcl ();
+void fetch_pc_to_pch ();
+void fetch_abus_to_pch ();
+void inc_pc ();
+void inc_ladd_no_fix ();
+void set_zero_and_neg (uint8_t result);
+
+void decode ();
+
+// All instruction functions, each one will queue a number of single-cycle actions
+// NOTE: This will be expanded to include illegal opcodes in the future
+void ADC (address_mode mode);
+void AND (address_mode mode);
+void ASLA(address_mode mode);
+void ASL (address_mode mode);
+void BCC (address_mode mode);
+void BCS (address_mode mode);
+void BEQ (address_mode mode);
+void BIT (address_mode mode);
+void BMI (address_mode mode);
+void BNE (address_mode mode);
+void BPL (address_mode mode);
+void BRK (address_mode mode);
+void BVC (address_mode mode);
+void BVS (address_mode mode);
+void CLC (address_mode mode);
+void CLD (address_mode mode);
+void CLI (address_mode mode);
+void CLV (address_mode mode);
+void CMP (address_mode mode);
+void CPX (address_mode mode);
+void CPY (address_mode mode);
+void DEC (address_mode mode);
+void DEX (address_mode mode);
+void DEY (address_mode mode);
+void EOR (address_mode mode);
+void INC (address_mode mode);
+void INX (address_mode mode);
+void INY (address_mode mode);
+void JMP (address_mode mode);
+void JSR (address_mode mode);
+void LDA (address_mode mode);
+void LDX (address_mode mode);
+void LDY (address_mode mode);
+void LSRA(address_mode mode);
+void LSR (address_mode mode);
+void NOP (address_mode mode);
+void ORA (address_mode mode);
+void PHA (address_mode mode);
+void PHP (address_mode mode);
+void PLA (address_mode mode);
+void PLP (address_mode mode);
+void ROLA(address_mode mode);
+void ROL (address_mode mode);
+void RORA(address_mode mode);
+void ROR (address_mode mode);
+void RTI (address_mode mode);
+void RTS (address_mode mode);
+void SBC (address_mode mode);
+void SEC (address_mode mode);
+void SED (address_mode mode);
+void SEI (address_mode mode);
+void STA (address_mode mode);
+void STX (address_mode mode);
+void STY (address_mode mode);
+void TAX (address_mode mode);
+void TAY (address_mode mode);
+void TSX (address_mode mode);
+void TXA (address_mode mode);
+void TXS (address_mode mode);
+void TYA (address_mode mode);
+
+// Helper function; push the given events to the event queue
+void push_events (std::vector<std::array<void (*) (), 2>> events);
+
+// Queue to store atomic events in.
+// NOTE: Each CPU cycle includes a maximum of two actions, and thus two function
+// pointers occupy a single space in the queue
+std::deque<std::array<void (*) (), 2>> event_queue;
+
+// INitialize the CCPU with the given mapper
+void Init_CPU (Cartridge* mapper) {
+
+	game = mapper;
 
 	// Assign all registers to their startup states
 	acc = x = y = 0;
-	pc = 0xFFFC;
+	pc = 0;
+    pc |= game->cpu_read(0xFFFC);
+    pc |= game->cpu_read(0xFFFD) << 8;
 	sp = 0xFD;
 	status = 0b00100100;
+
+    // Start the CPU at the first instruction
+    push_events({});
 }
 
 // Helper function to push a range of atomic operations to the event queue
 // NOTE: Adds fetch and decode operations to the queue,
 // ONLY USE when adding a new instruction!!!
-void CPU::push_events (std::vector<std::array<void (CPU::*) (), 2>> events) {
+void push_events (std::vector<std::array<void (*) (), 2>> events) {
 	for (int i = 0; i < events.size(); i++) {
 		event_queue.push_back(events[i]);
 	}
+	event_queue.push_back({&fetch_opcode, &decode});
 }
 
 /*
  * Execute one CPU cycle.
  */
- void CPU::cycle () {
+ void cycle_cpu () {
 
-    (this->*event_queue.front()[0])();
+    (*event_queue.front()[0])();
 
     if (event_queue.front()[1] != NULL) {
-        (this->*event_queue.front()[1])();
+        (*event_queue.front()[1])();
     }
 
     event_queue.pop_front();
 }
 
+// Set the processor to start an interrupt after the current instuction finishes
+void signal_nmi () {
+    // Remove the fetch/decode cycle that's currently queued
+    event_queue.pop_back();
+    push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
+                {&push_p_nmi, &dec_sp}, {&fetch_pcl_nmi, NULL}, {&fetch_pch_nmi, NULL}});
+}
+
 // Do nothing
-void CPU::nop () {
+void nop () {
 }
 
 // Fetch the data at the address bus's pointer into the data bus
-void CPU::fetch_data_abus () {
+void fetch_data_abus () {
 	dbus = game->cpu_read(abus);
 }
 
 // Fetch the data at the program counter into the data bus
-void CPU::fetch_data_pc () {
+void fetch_data_pc () {
 	dbus = game->cpu_read(pc);
 	pc++;
 }
 
 // Fetch the data at the program counter into the low byte of the address bus
-void CPU::fetch_ladd_pc () {
+void fetch_ladd_pc () {
 	dbus = game->cpu_read(pc);
 	abus = 0;
 	abus |= dbus;
@@ -58,7 +281,7 @@ void CPU::fetch_ladd_pc () {
 }
 
 // Fetch the high address of the address bus
-void CPU::fetch_hadd_pc () {
+void fetch_hadd_pc () {
 	dbus = game->cpu_read(pc);
 	abus &= 0x00FF;
 	abus |= (dbus << 8);
@@ -66,14 +289,14 @@ void CPU::fetch_hadd_pc () {
 }
 
 // Fetch the data at the abus into the low byte of the address bus
-void CPU::fetch_ladd_abus () {
+void fetch_ladd_abus () {
 	dbus = game->cpu_read(abus);
 	abus = 0;
 	abus |= dbus;
 }
 
 // Fetch the data at the abus into the high byte of the address bus
-void CPU::fetch_hadd_abus () {
+void fetch_hadd_abus () {
 	dbus = game->cpu_read(abus);
 	abus &= 0x00FF;
 	abus |= (dbus << 8);
@@ -81,12 +304,12 @@ void CPU::fetch_hadd_abus () {
 
 
 // Fetch next opcode from PC
-void CPU::fetch_opcode () {
+void fetch_opcode () {
 	opcode = dbus = game->cpu_read(pc);
 	pc++;
 }
 
-void CPU::write_data_abus () {
+void write_data_abus () {
     game->cpu_write(abus, dbus);
 }
 
@@ -94,14 +317,14 @@ void CPU::write_data_abus () {
  * Add the contents of the data bus to the low bytes of PC
  * NOTE: If there is a page crossing, an additional cycle will be added
  */
-void CPU::add_dbus_pcl () {
+void add_dbus_pcl () {
 
     uint8_t pcl = (uint8_t) pc & 0xFF;
     pcl += dbus;
 
     if (pc & 0xFF > pcl) {
         status |= CARRY_FLAG;
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::fix_pch});
+        event_queue.push_front({&fetch_opcode, &fix_pch});
     }
 
     pc &= 0xFF00;
@@ -112,7 +335,7 @@ void CPU::add_dbus_pcl () {
  * Add the contents of the X register to the low byte of the address bus
  * NOTE: This version of the function will NOT skip if fixing is unnecessary
  */
-void CPU::add_x_ladd () {
+void add_x_ladd () {
 
 	uint8_t ladd = (uint8_t) abus;
 	abus &= 0xFF00;
@@ -129,14 +352,14 @@ void CPU::add_x_ladd () {
  * Add the contents of the X register to the low byte of the address bus
  * NOTE: This version of the function WILL skip a cycle if fixing is unnecessary
  */
- void CPU::add_x_ladd_skip () {
+ void add_x_ladd_skip () {
 
 	uint8_t ladd = (uint8_t) abus;
 	abus &= 0xFF00;
 
 	if (ladd + x > 0x00FF) {
 		status |= CARRY_FLAG;
-        event_queue.push_front({&CPU::fetch_data_abus, &CPU::fix_add});
+        event_queue.push_front({&fetch_data_abus, &fix_add});
 	}
 
 	ladd += x;
@@ -147,7 +370,7 @@ void CPU::add_x_ladd () {
  * Add the contents of the Y register to the low byte of the address bus
  * NOTE: This version of the function will NOT skip if fixing is unnecessary
  */
-void CPU::add_y_ladd () {
+void add_y_ladd () {
 
 	uint8_t ladd = (uint8_t) abus;
 	abus &= 0xFF00;
@@ -164,14 +387,14 @@ void CPU::add_y_ladd () {
  * Add the contents of the Y register to the low byte of the address bus
  * NOTE: This version of the function WILL skip a cycle if fixing is unnecessary
  */
- void CPU::add_y_ladd_skip () {
+ void add_y_ladd_skip () {
 
 	uint8_t ladd = (uint8_t) abus;
 	abus &= 0xFF00;
 
 	if (ladd + y > 0x00FF) {
 		status |= CARRY_FLAG;
-        event_queue.push_front({&CPU::fetch_data_abus, &CPU::fix_add});
+        event_queue.push_front({&fetch_data_abus, &fix_add});
 	}
 
 	ladd += y;
@@ -179,14 +402,14 @@ void CPU::add_y_ladd () {
 }
 
 // Add the contents of the X register to a zero page address
-void CPU::add_x_zp () {
+void add_x_zp () {
 	abus &= 0xFF;
 	uint8_t* ladd = (uint8_t*) &abus;
 	*ladd += x;
 }
 
 // Add the contents of the Y register to a zero page address
-void CPU::add_y_zp () {
+void add_y_zp () {
 	abus &= 0xFF;
 	uint8_t* ladd = (uint8_t*) &abus;
 	*ladd += y;
@@ -194,7 +417,7 @@ void CPU::add_y_zp () {
 
 // Fix the high byte of the address bus.
 // Only executed in cases of page crossings.
-void CPU::fix_add () {
+void fix_add () {
     if (status &= CARRY_FLAG) {
         abus += 0x100;
     }
@@ -202,105 +425,110 @@ void CPU::fix_add () {
 
 // Fix the high byte of the program counter.
 // Only executed in cases of page crossings.
-void CPU::fix_pch () {
+void fix_pch () {
     if (status &= CARRY_FLAG) {
         pc += 0x100;
     }
 }
 
 // Increment the abus by one
-void CPU::inc_abus () {
+void inc_abus () {
 	abus++;
 }
 
 // Decrement the stack pointer by one byte
-void CPU::dec_sp () {
+void dec_sp () {
     sp--;
 }
 
 // Increment the stack pointer by one byte
-void CPU::inc_sp () {
+void inc_sp () {
     sp++;
 }
 
 // Push the high byte of PC onto the stack
-void CPU::push_pch () {
+void push_pch () {
     game->cpu_write(sp, (uint8_t) (pc & 0xFF00) >> 8);
 }
 
 // Pop the high byte of PC from the stack
-void CPU::pop_pch () {
+void pop_pch () {
     pc &= 0x00FF;
     pc |= game->cpu_read(sp-1) << 8;
 }
 
 // Push the low byte of PC onto the stack
-void CPU::push_pcl () {
+void push_pcl () {
     game->cpu_write(sp, (uint8_t) (pc & 0x00FF));
 }
 
 // Pop the low byte of PC from the stack
-void CPU::pop_pcl () {
+void pop_pcl () {
     pc &= 0xFF00;
     pc |= game->cpu_read(sp-1);
 }
 
 // Push the status register to the stack with the B flag set
-void CPU::push_p () {
+void push_p_irq () {
     game->cpu_write(sp, status | B_FLAG | EXTRA_FLAG);
 }
 
+// Push the status register to the stack with the B flag unset
+void push_p_nmi () {
+    game->cpu_write(sp, (status | EXTRA_FLAG) & ~B_FLAG);
+}
+
 // Pop the status register from the stack
-void CPU::pop_p () {
+void pop_p () {
     status = game->cpu_read(sp - 1);
 }
 
 // Fetch the low byte of the IRQ interrupt handler
-void CPU::fetch_pcl_irq  () {
+void fetch_pcl_irq  () {
     dbus = game->cpu_read(0xFFFE);
 }
 
 // Fetch the high byte of the IRQ interrupt handler
-void CPU::fetch_pch_irq () {
+void fetch_pch_irq () {
     dbus = game->cpu_read(0xFFFF);
 }
 
 // Fetch the low byte of the NMI interrupt handler
-void CPU::fetch_pcl_nmi () {
+void fetch_pcl_nmi () {
     dbus = game->cpu_read(0xFFFA);
 }
 
 // Fetch the high byte of the NMI interrupt handler
-void CPU::fetch_pch_nmi () {
+void fetch_pch_nmi () {
     dbus = game->cpu_read(0xFFFB);
 }
 
 // Copy the dbus to the low byte of PC
-void CPU::copy_dbus_pcl () {
+void copy_dbus_pcl () {
     pc &= 0xFF00;
     pc |= dbus;
 }
 
 // Fetch data from PC to the high byte of PC
-void CPU::fetch_pc_to_pch () {
+void fetch_pc_to_pch () {
     uint8_t pch = game->cpu_read(pc) << 8;
     pc &= 0x00FF;
     pc |= pch << 8;
 }
 
 // Fetch data from the abus's address to the low byte of PC
-void CPU::fetch_abus_to_pch () {
+void fetch_abus_to_pch () {
     pc &= 0x00FF;
     pc |= game->cpu_read(abus) << 8;
 }
 
 // Increment the PC by one
-void CPU::inc_pc () {
+void inc_pc () {
     pc++;
 }
 
 // Increment the low address of the address bus, do not fix it
-void CPU::inc_ladd_no_fix () {
+void inc_ladd_no_fix () {
     uint8_t ladd = 0x00FF & abus;
     ladd++;
     abus &= 0xFF00;
@@ -309,7 +537,7 @@ void CPU::inc_ladd_no_fix () {
 
 // Set zero and negative flags depending on the result
 // NOTE: Used in a variety of atomic operations on many registers
-void CPU::set_zero_and_neg (uint8_t result) {
+void set_zero_and_neg (uint8_t result) {
     if (!result) {
         status |= ZERO_FLAG;
     } else {
@@ -323,7 +551,7 @@ void CPU::set_zero_and_neg (uint8_t result) {
 /* NOTE: Specialized operations for particular instructions begin here */
 
 // Add the contents of the data bus to the accumulator, with carry
-void CPU::adc_acc () {
+void adc_acc () {
     uint8_t old_acc = acc;
     acc += dbus;
 
@@ -343,7 +571,7 @@ void CPU::adc_acc () {
 // Perform a bitwise AND operation on the accumulator
 // Sets the zero flag if the result is zero, sets the negative
 // flag if the result is a signed negative integer
-void CPU::and_acc () {
+void and_acc () {
     acc &= dbus;
     set_zero_and_neg(acc);
 }
@@ -352,7 +580,7 @@ void CPU::and_acc () {
  * Shift the accumulator left one bit.
  * Save the 7th bit in the carry flag
  */
-void CPU::asl_acc () {
+void asl_acc () {
 
     if (acc & 0b1000000) {
         status |= CARRY_FLAG;
@@ -368,7 +596,7 @@ void CPU::asl_acc () {
  * Shift the data bus left one bit.
  * Save the 7th bit in the carry flag
  */
-void CPU::asl_dbus () {
+void asl_dbus () {
 
     if (dbus & 0b10000000) {
         status |= CARRY_FLAG;
@@ -394,51 +622,51 @@ void CPU::asl_dbus () {
  *      BVC - Branch if the overflow flag is not set
  *      BVS - Branch if the overflow flag is set
  */
-void CPU::bcc () {
+void bcc () {
     if (!(status & CARRY_FLAG)) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::bcs () {
+void bcs () {
     if (status & CARRY_FLAG) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::beq () {
+void beq () {
     if (status & ZERO_FLAG) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::bmi () {
+void bmi () {
     if (status & NEGATIVE_FLAG) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::bne () {
+void bne () {
     if (!(status & ZERO_FLAG)) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::bpl () {
+void bpl () {
     if (!(status & ZERO_FLAG)) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::bvc () {
+void bvc () {
     if (!(status & OVERFLOW_FLAG)) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
-void CPU::bvs () {
+void bvs () {
     if (status & OVERFLOW_FLAG) {
-        event_queue.push_front({&CPU::fetch_opcode, &CPU::add_dbus_pcl});
+        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
@@ -446,7 +674,7 @@ void CPU::bvs () {
 // AND the data in the dbus with the accumulator. If the result is zero,
 // set the zero flag. If not, reset the flag. No matter what, copy the
 // 6th and 7th bits of the memory address into the status register
-void CPU::bit () {
+void bit () {
     uint8_t result = dbus & acc;
 
     if (result) {
@@ -460,27 +688,27 @@ void CPU::bit () {
 }
 
 // Clear the carry flag
-void CPU::clc () {
+void clc () {
     status &= ~CARRY_FLAG;
 }
 
 // Clear the decimal flag (disabled on the NES)
-void CPU::cld () {
+void cld () {
     status &= ~DECIMAL_FLAG;
 }
 
 // Clear the interrupt disable flag
-void CPU::cli () {
+void cli () {
     status &= ~INTERRUPT_FLAG;
 }
 
 // Clear the overflow flag
-void CPU::clv () {
+void clv () {
     status &= ~OVERFLOW_FLAG;
 }
 
 // Compare the value of the specified location with the accumulator, set the status flags accordingly
-void CPU::cmp () {
+void cmp () {
     // Check to set the carry flag
     if (dbus <= acc) {
         status |= CARRY_FLAG;
@@ -496,7 +724,7 @@ void CPU::cmp () {
 }
 
 // Compare the value of the specified location with the X register, set the status flags accordingly
-void CPU::cpx () {
+void cpx () {
     // Check to set the carry flag
     if (dbus <= x) {
         status |= CARRY_FLAG;
@@ -512,7 +740,7 @@ void CPU::cpx () {
 }
 
 // Compare the value of the specified location with the Y register, set the status flags accordingly
-void CPU::cpy () {
+void cpy () {
     // Check to set the carry flag
     if (dbus <= x) {
         status |= CARRY_FLAG;
@@ -528,68 +756,68 @@ void CPU::cpy () {
 }
 
 // Decrement the dbus by one, set flags accordingly
-void CPU::dec () {
+void dec () {
     dbus -= 1;
     set_zero_and_neg(dbus);
 }
 
 // Decrement X by one, set flags accordingly
-void CPU::dex () {
+void dex () {
     x -= 1;
     set_zero_and_neg(x);
 }
 
 // Decrement Y by one, set flags accordingly
-void CPU::dey () {
+void dey () {
     y -= 1;
     set_zero_and_neg(y);
 }
 
 // Perform an XOR on the accumulator and dbus, store in acc
-void CPU::eor () {
+void eor () {
     acc ^= dbus;
     set_zero_and_neg(acc);
 }
 
 // Increment the dbus by one
-void CPU::inc () {
+void inc () {
     dbus += 1;
     set_zero_and_neg(dbus);
 }
 
 // Increment X by one
-void CPU::inx () {
+void inx () {
     x += 1;
     set_zero_and_neg(x);
 }
 
 // Increment Y by one
-void CPU::iny () {
+void iny () {
     y += 1;
     set_zero_and_neg(y);
 }
 
 // Load the accumulator with the memory in dbus, set flags accordingly
-void CPU::lda () {
+void lda () {
     acc  = dbus;
     set_zero_and_neg(acc);
 }
 
 // Load X with the memory in dbus, set flags accordingly
-void CPU::ldx () {
+void ldx () {
     x = dbus;
     set_zero_and_neg(x);
 }
 
 // Load Y with the memory in dbus, set flags accordingly
-void CPU::ldy () {
+void ldy () {
     y = dbus;
     set_zero_and_neg(y);
 }
 
 // Shift the accumulator right one bit. Store the low bit in the carry flag.
 // Reset the negative flag.
-void CPU::lsr_acc () {
+void lsr_acc () {
     if (acc & 0x01) {
         status |= CARRY_FLAG;
     } else {
@@ -609,7 +837,7 @@ void CPU::lsr_acc () {
 
 // Shift the dbus right one bit. Store the low bit in the carry flag.
 // Reset the negative flag.
-void CPU::lsr_dbus () {
+void lsr_dbus () {
     if (dbus & 0x01) {
         status |= CARRY_FLAG;
     } else {
@@ -628,24 +856,24 @@ void CPU::lsr_dbus () {
 }
 
 // Perform a bitwise OR with the dbus and accumulator
-void CPU::ora () {
+void ora () {
     acc = dbus | acc;
     set_zero_and_neg(acc);
 }
 
 // Push the accumulator onto the stack
-void CPU::push_acc () {
+void push_acc () {
     game->cpu_write(sp, acc);
 }
 
 // Pop the accumulator from the stack
-void CPU::pop_acc () {
+void pop_acc () {
     acc = game->cpu_read(sp - 1);
 }
 
 // Rotate the accumulator left; i.e. store the 7th bit in the carry flag,
 // store the initial carry flag in the 0th bit, and shift left one bit.
-void CPU::rol_acc () {
+void rol_acc () {
     uint8_t temp_status = status;
 
     if (acc & 0b10000000) {
@@ -664,7 +892,7 @@ void CPU::rol_acc () {
 
 // Rotate the dbus left; i.e. store the 7th bit in the carry flag,
 // store the initial carry flag in the 0th bit, and shift left one bit.
-void CPU::rol_dbus () {
+void rol_dbus () {
     uint8_t temp_status = status;
 
     if (dbus & 0b10000000) {
@@ -683,7 +911,7 @@ void CPU::rol_dbus () {
 
 // Rotate the accumulator right; i.e. store the 7th bit in the carry flag,
 // store the initial carry flag in the 0th bit, and shift left one bit.
-void CPU::ror_acc () {
+void ror_acc () {
     uint8_t temp_status = status;
 
     if (acc & 0b00000001) {
@@ -702,7 +930,7 @@ void CPU::ror_acc () {
 
 // Rotate the dbus right; i.e. store the 7th bit in the carry flag,
 // store the initial carry flag in the 0th bit, and shift left one bit.
-void CPU::ror_dbus () {
+void ror_dbus () {
     uint8_t temp_status = status;
 
     if (dbus & 0b00000001) {
@@ -720,7 +948,7 @@ void CPU::ror_dbus () {
 }
 
 // Subtract the value in the dbus from the accumulator.
-void CPU::sbc () {
+void sbc () {
     int8_t result = ((int8_t) acc - (int8_t) dbus);
     int16_t real_result = ((int16_t) acc) - ((int16_t) dbus);
 
@@ -741,67 +969,67 @@ void CPU::sbc () {
 }
 
 // Set the carry flag
-void CPU::sec () {
+void sec () {
     status |= CARRY_FLAG;
 }
 
 // Set the decimal flag
-void CPU::sed () {
+void sed () {
     status |= DECIMAL_FLAG;
 }
 
 // Set the interrupt disable flag
-void CPU::sei () {
+void sei () {
     status |= INTERRUPT_FLAG;
 }
 
 // Write the accumulator to the abus location
-void CPU::sta () {
+void sta () {
     game->cpu_write(abus, acc);
 }
 
 // Write X to the abus location
-void CPU::stx () {
+void stx () {
     game->cpu_write(abus, x);
 }
 
 // Write Y to the abus location
-void CPU::sty () {
+void sty () {
     game->cpu_write(abus, y);
 }
 
 // Transfer acc to X
-void CPU::tax () {
+void tax () {
     x = acc;
     set_zero_and_neg(x);
 }
 
 // Transfer acc to Y
-void CPU::tay () {
+void tay () {
     y = acc;
     set_zero_and_neg(y);
 }
 
 // Transfer SP to X
-void CPU::tsx () {
+void tsx () {
     x = sp;
     set_zero_and_neg(x);
 }
 
 // Transfer X to acc
-void CPU::txa () {
+void txa () {
     acc = x;
     set_zero_and_neg(acc);
 }
 
 // Transfer X to SP
-void CPU::txs () {
+void txs () {
     sp = x;
     set_zero_and_neg(sp);
 }
 
 // Transfer Y to acc
-void CPU::tya () {
+void tya () {
     acc = y;
     set_zero_and_neg(acc);
 }
@@ -809,97 +1037,97 @@ void CPU::tya () {
 /* NOTE: Helper functions for generic instruction types begin here */
 
 // Generic read type function
-void CPU::push_events_read (address_mode mode, void (CPU::*func) ()) {
+void push_events_read (address_mode mode, void (*func) ()) {
     switch (mode) {
         case IMM:
-			push_events({{&CPU::fetch_data_pc, func}});
+			push_events({{&fetch_data_pc, func}});
 			break;
 		case ABS:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL},
-				{&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
+				{&fetch_data_abus, func}});
 			break;
 		case XABS:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_x_ladd_skip},
-				{&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd_skip},
+				{&fetch_data_abus, func}});
 			break;
 		case YABS:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_y_ladd_skip},
-				{&CPU::fetch_data_abus, &CPU::fix_add}, {&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd_skip},
+				{&fetch_data_abus, &fix_add}, {&fetch_data_abus, func}});
 			break;
 		case ZP:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, func}});
 			break;
 		case XZP:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_x_zp},
-				{&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp},
+				{&fetch_data_abus, func}});
 			break;
         case YZP:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_y_zp},
-				{&CPU::fetch_data_abus, func}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_y_zp},
+				{&fetch_data_abus, func}});
 			break;
 		case XZPI:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::add_x_zp},
-				{&CPU::fetch_ladd_abus, &CPU::inc_abus}, {&CPU::fetch_hadd_abus, NULL},
-				{&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &add_x_zp},
+				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
+				{&fetch_data_abus, func}});
             break;
 		case ZPIY:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::inc_abus},
-				{&CPU::fetch_hadd_abus, &CPU::add_x_ladd_skip}, {&CPU::fetch_data_abus, &CPU::fix_add},
-				{&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &inc_abus},
+				{&fetch_hadd_abus, &add_x_ladd_skip}, {&fetch_data_abus, &fix_add},
+				{&fetch_data_abus, func}});
             break;
     }
 }
 
 // Generic read-modify-write type function
-void CPU::push_events_read_mod_write (address_mode mode, void (CPU::*func) ()) {
+void push_events_read_mod_write (address_mode mode, void (*func) ()) {
     switch (mode) {
         case ABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL},
-                {&CPU::fetch_data_abus, &CPU::asl_dbus}, {&CPU::write_data_abus, func},
-                {&CPU::write_data_abus, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
+                {&fetch_data_abus, &asl_dbus}, {&write_data_abus, func},
+                {&write_data_abus, NULL}});
             break;
         case XABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_pc, &CPU::add_x_ladd},
-                {&CPU::fetch_data_abus, &CPU::fix_add}, {&CPU::fetch_data_abus, NULL},
-                {&CPU::write_data_abus, func}, {&CPU::write_data_abus, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_pc, &add_x_ladd},
+                {&fetch_data_abus, &fix_add}, {&fetch_data_abus, NULL},
+                {&write_data_abus, func}, {&write_data_abus, NULL}});
             break;
         case ZP:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, NULL},
-                {&CPU::write_data_abus, func}, {&CPU::write_data_abus, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, NULL},
+                {&write_data_abus, func}, {&write_data_abus, NULL}});
             break;
         case XZP:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_x_zp},
-				{&CPU::fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp},
+				{&fetch_data_abus, func}});
 			break;
     }
 }
 
 // Generic simple write type functin
-void CPU::push_events_write (address_mode mode, void (CPU::*func) ()) {
+void push_events_write (address_mode mode, void (*func) ()) {
     switch (mode) {
         case ABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL}, {func, NULL}});
             break;
         case XABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_x_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd}, {&fetch_data_abus, &fix_add}, {func, NULL}});
             break;
         case YABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, &CPU::add_y_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd}, {&fetch_data_abus, &fix_add}, {func, NULL}});
             break;
         case ZP:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {func, NULL}});
             break;
         case XZP:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::add_x_zp}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp}, {func, NULL}});
             break;
         case XZPI:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::add_x_zp},
-				{&CPU::fetch_ladd_abus, &CPU::inc_abus}, {&CPU::fetch_hadd_abus, NULL},
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &add_x_zp},
+				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
                 {func, NULL}});
             break;
         case ZPIY:
-			push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_ladd_abus, &CPU::inc_abus},
-				{&CPU::fetch_hadd_abus, &CPU::add_x_ladd}, {&CPU::fetch_data_abus, &CPU::fix_add},
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &inc_abus},
+				{&fetch_hadd_abus, &add_x_ladd}, {&fetch_data_abus, &fix_add},
 				{func, NULL}});
             break;
     }
@@ -908,318 +1136,318 @@ void CPU::push_events_write (address_mode mode, void (CPU::*func) ()) {
 /* NOTE: Opcode handlers begin here */
 
 // Add the data, as specified through addressing, to the accumulator
-void CPU::ADC (address_mode mode) {
-    push_events_read(mode, &CPU::adc_acc);
+void ADC (address_mode mode) {
+    push_events_read(mode, &adc_acc);
 }
 
 // AND the specified data to the accumulator
-void CPU::AND (address_mode mode) {
-    push_events_read(mode, &CPU::and_acc);
+void AND (address_mode mode) {
+    push_events_read(mode, &and_acc);
 }
 
 // Shift the accumulator left one bit
-void CPU::ASLA (address_mode mode) {
-    push_events({{&CPU::asl_acc, NULL}});
+void ASLA (address_mode mode) {
+    push_events({{&asl_acc, NULL}});
 }
 
 // Shift the data left by one bit
-void CPU::ASL (address_mode mode) {
-    push_events_read_mod_write(mode, &CPU::asl_dbus);
+void ASL (address_mode mode) {
+    push_events_read_mod_write(mode, &asl_dbus);
 }
 
 /* BRANCH INSTRUCTIONS */
-void CPU::BCC (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bcc}});
+void BCC (address_mode mode) {
+    push_events({{&fetch_data_pc, &bcc}});
 }
 
-void CPU::BCS (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bcs}});
+void BCS (address_mode mode) {
+    push_events({{&fetch_data_pc, &bcs}});
 }
 
-void CPU::BEQ (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::beq}});
+void BEQ (address_mode mode) {
+    push_events({{&fetch_data_pc, &beq}});
 }
 
-void CPU::BMI (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bmi}});
+void BMI (address_mode mode) {
+    push_events({{&fetch_data_pc, &bmi}});
 }
 
-void CPU::BNE (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bne}});
+void BNE (address_mode mode) {
+    push_events({{&fetch_data_pc, &bne}});
 }
 
-void CPU::BPL (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bpl}});
+void BPL (address_mode mode) {
+    push_events({{&fetch_data_pc, &bpl}});
 }
 
-void CPU::BVC (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bvc}});
+void BVC (address_mode mode) {
+    push_events({{&fetch_data_pc, &bvc}});
 }
 
-void CPU::BVS (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, &CPU::bvs}});
+void BVS (address_mode mode) {
+    push_events({{&fetch_data_pc, &bvs}});
 }
 
 // AND the memory location with the accumulator, but do not save the result
-void CPU::BIT (address_mode mode) {
+void BIT (address_mode mode) {
     switch (mode) {
         case ABS:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_hadd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::bit}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL}, {&fetch_data_abus, &bit}});
         case ZP:
-            push_events({{&CPU::fetch_ladd_pc, NULL}, {&CPU::fetch_data_abus, &CPU::bit}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &bit}});
     }
 }
 
 // Undergo a voluntary interrupt. Pushes PC to the stack first, then status,
 // and finally reads the handler address from 0xFFFE - 0xFFFF
-void CPU::BRK (address_mode mode) {
-    push_events({{&CPU::fetch_opcode, NULL}, {&CPU::push_pch, &CPU::dec_sp}, {&CPU::push_pcl, &CPU::dec_sp},
-                {&CPU::push_p, &CPU::dec_sp}, {&CPU::fetch_pcl_irq, NULL}, {&CPU::fetch_pch_irq, NULL}});
+void BRK (address_mode mode) {
+    push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
+                {&push_p_irq, &dec_sp}, {&fetch_pcl_irq, NULL}, {&fetch_pch_irq, NULL}});
 }
 
 // Clear the carry bit
-void CPU::CLC (address_mode mode) {
-    push_events({{&CPU::fetch_ladd_pc, &CPU::clc}});
+void CLC (address_mode mode) {
+    push_events({{&clc, NULL}});
 }
 
 // Clear the decimal flag. NOTE: The decimal mode is disabled on the NES
-void CPU::CLD (address_mode mode) {
-    push_events({{&CPU::fetch_ladd_pc, &CPU::cld}});
+void CLD (address_mode mode) {
+    push_events({{&cld, NULL}});
 }
 
 // Clear the interrupt disable flag
-void CPU::CLI (address_mode mode) {
-    push_events({{&CPU::fetch_ladd_pc, &CPU::cli}});
+void CLI (address_mode mode) {
+    push_events({{&cli, NULL}});
 }
 
 // Clear the overflow flag
-void CPU::CLV (address_mode mode) {
-    push_events({{&CPU::fetch_ladd_pc, &CPU::clv}});
+void CLV (address_mode mode) {
+    push_events({{&clv, NULL}});
 }
 
 // Compare the value of the memory location with the accumulator
-void CPU::CMP (address_mode mode) {
-    push_events_read(mode, &CPU::cmp);
+void CMP (address_mode mode) {
+    push_events_read(mode, &cmp);
 }
 
 // Compare the memory with X
-void CPU::CPX (address_mode mode) {
-    push_events_read(mode, &CPU::cpx);
+void CPX (address_mode mode) {
+    push_events_read(mode, &cpx);
 }
 
 // Compare the memory with Y
-void CPU::CPY (address_mode mode) {
-    push_events_read(mode, &CPU::cpy);
+void CPY (address_mode mode) {
+    push_events_read(mode, &cpy);
 }
 
 // Decrement the memory location by one
-void CPU::DEC (address_mode mode) {
-    push_events_read_mod_write(mode, &CPU::dec);
+void DEC (address_mode mode) {
+    push_events_read_mod_write(mode, &dec);
 }
 
 // Decrement the X register by one
-void CPU::DEX (address_mode mode) {
-    push_events({{&CPU::dex, NULL}});
+void DEX (address_mode mode) {
+    push_events({{&dex, NULL}});
 }
 
 // Decrement the Y register by one
-void CPU::DEY (address_mode mode) {
-    push_events({{&CPU::dey, NULL}});
+void DEY (address_mode mode) {
+    push_events({{&dey, NULL}});
 }
 
 // Perform an XOR on the memory location with acc, save it in acc
-void CPU::EOR (address_mode mode) {
-    push_events_read(mode, &CPU::eor);
+void EOR (address_mode mode) {
+    push_events_read(mode, &eor);
 }
 
 // Increment the memory location by one
-void CPU::INC (address_mode mode) {
-    push_events_read_mod_write(mode, &CPU::inc);
+void INC (address_mode mode) {
+    push_events_read_mod_write(mode, &inc);
 }
 
 // Increment X by one
-void CPU::INX (address_mode mode) {
-    push_events({{&CPU::inx, NULL}});
+void INX (address_mode mode) {
+    push_events({{&inx, NULL}});
 }
 
 // Increment Y by one
-void CPU::INY (address_mode mode) {
-    push_events({{&CPU::iny, NULL}});
+void INY (address_mode mode) {
+    push_events({{&iny, NULL}});
 }
 
 // Set PC to a new location
-void CPU::JMP (address_mode mode) {
+void JMP (address_mode mode) {
     switch (mode) {
         case ABS:
-            push_events({{&CPU::fetch_data_pc, NULL}, {&CPU::fetch_pc_to_pch, &CPU::copy_dbus_pcl}});
+            push_events({{&fetch_data_pc, NULL}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
         case ABSI:
-            push_events({{&CPU::fetch_ladd_pc, &CPU::inc_pc}, {&CPU::fetch_hadd_pc, &CPU::inc_pc},
-                {&CPU::fetch_data_abus, &CPU::inc_ladd_no_fix}, {&CPU::copy_dbus_pcl, &CPU::fetch_abus_to_pch}});
+            push_events({{&fetch_ladd_pc, &inc_pc}, {&fetch_hadd_pc, &inc_pc},
+                {&fetch_data_abus, &inc_ladd_no_fix}, {&copy_dbus_pcl, &fetch_abus_to_pch}});
     }
 }
 
 // Jump to subroutine; i.e. set PC to a new location and push current state on the stack
-void CPU::JSR (address_mode mode) {
-    push_events({{&CPU::fetch_data_pc, NULL}, {&CPU::nop, NULL}, {&CPU::push_pch, &CPU::dec_sp},
-        {&CPU::push_pcl, &CPU::dec_sp}, {&CPU::fetch_pc_to_pch, &CPU::copy_dbus_pcl}});
+void JSR (address_mode mode) {
+    push_events({{&fetch_data_pc, NULL}, {&nop, NULL}, {&push_pch, &dec_sp},
+        {&push_pcl, &dec_sp}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
 }
 
 // Load the accumulator with the memory from the address specified
-void CPU::LDA (address_mode mode) {
-    push_events_read(mode, &CPU::lda);
+void LDA (address_mode mode) {
+    push_events_read(mode, &lda);
 }
 
 // Load X with the memory from the address specified
-void CPU::LDX (address_mode mode) {
-    push_events_read(mode, &CPU::ldx);
+void LDX (address_mode mode) {
+    push_events_read(mode, &ldx);
 }
 
 // Load Y with the memory from the address specified
-void CPU::LDY (address_mode mode) {
-    push_events_read(mode, &CPU::ldy);
+void LDY (address_mode mode) {
+    push_events_read(mode, &ldy);
 }
 
 // Shift the accumulator right by one
-void CPU::LSRA (address_mode mode) {
-    push_events({{&CPU::lsr_acc, NULL}});
+void LSRA (address_mode mode) {
+    push_events({{&lsr_acc, NULL}});
 }
 
 // Shift the memory location right by one
-void CPU::LSR (address_mode mode) {
-    push_events_read(mode, &CPU::lsr_dbus);
+void LSR (address_mode mode) {
+    push_events_read(mode, &lsr_dbus);
 }
 
 // Do nothing for a cycle
-void CPU::NOP (address_mode mode) {
-    push_events({{&CPU::nop, NULL}});
+void NOP (address_mode mode) {
+    push_events({{&nop, NULL}});
 }
 
 // Perform a bitwise OR with the memory location and accumulator
-void CPU::ORA (address_mode mode) {
-    push_events_read(mode, &CPU::ora);
+void ORA (address_mode mode) {
+    push_events_read(mode, &ora);
 }
 
 // Push the accumulator onto the stack
-void CPU::PHA (address_mode mode) {
-    push_events({{&CPU::nop, NULL}, {&CPU::push_acc, &CPU::dec_sp}});
+void PHA (address_mode mode) {
+    push_events({{&nop, NULL}, {&push_acc, &dec_sp}});
 }
 
 // Push the status register onto the stack
-void CPU::PHP (address_mode mode) {
-    push_events({{&CPU::nop, NULL}, {&CPU::push_p, &CPU::dec_sp}});
+void PHP (address_mode mode) {
+    push_events({{&nop, NULL}, {&push_p_irq, &dec_sp}});
 }
 
 // Pop the accumulator from the stack
-void CPU::PLA (address_mode mode) {
-    push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_acc, NULL}});
+void PLA (address_mode mode) {
+    push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_acc, NULL}});
 }
 
 // Pop the status register from the stack
-void CPU::PLP (address_mode mode) {
-    push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_p, NULL}});
+void PLP (address_mode mode) {
+    push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_p, NULL}});
 }
 
 // NOTE: Rotation is specified in the rol_acc/dbus and ror_acc/dbus functions
 // Rotate the accumulator left.
-void CPU::ROLA (address_mode mode) {
-    push_events({{&CPU::rol_acc, NULL}});
+void ROLA (address_mode mode) {
+    push_events({{&rol_acc, NULL}});
 }
 
 // Rotate the memory address left
-void CPU::ROL (address_mode mode) {
-    push_events_read_mod_write(mode, &CPU::rol_dbus);
+void ROL (address_mode mode) {
+    push_events_read_mod_write(mode, &rol_dbus);
 }
 
 // Rotate the accumulator right
-void CPU::RORA (address_mode mode) {
-    push_events({{&CPU::ror_acc, NULL}});
+void RORA (address_mode mode) {
+    push_events({{&ror_acc, NULL}});
 }
 
 // Rotate the memory address right
-void CPU::ROR (address_mode mode) {
-    push_events_read_mod_write(mode, &CPU::ror_dbus);
+void ROR (address_mode mode) {
+    push_events_read_mod_write(mode, &ror_dbus);
 }
 
 // Return from interrupt. Restores all status flags
-void CPU::RTI (address_mode mode) {
-    push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_p, &CPU::inc_sp},
-        {&CPU::pop_pcl, &CPU::inc_sp}, {&CPU::pop_pch, NULL}});
+void RTI (address_mode mode) {
+    push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_p, &inc_sp},
+        {&pop_pcl, &inc_sp}, {&pop_pch, NULL}});
 }
 
 // Return from subroutine. Does not restore flags, simply pops PC from the stack
-void CPU::RTS (address_mode mode) {
-    push_events({{&CPU::nop, NULL}, {&CPU::inc_sp, NULL}, {&CPU::pop_pcl, &CPU::inc_sp},
-        {&CPU::pop_pch, NULL}, {&CPU::inc_pc, NULL}});
+void RTS (address_mode mode) {
+    push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_pcl, &inc_sp},
+        {&pop_pch, NULL}, {&inc_pc, NULL}});
 }
 
 // Subtract the value in memory from the accumulator, store in accumulator
-void CPU::SBC (address_mode mode) {
-    push_events_read(mode, &CPU::sbc);
+void SBC (address_mode mode) {
+    push_events_read(mode, &sbc);
 }
 
 // Set the carry flag
-void CPU::SEC (address_mode mode) {
-    push_events({{&CPU::sec, NULL}});
+void SEC (address_mode mode) {
+    push_events({{&sec, NULL}});
 }
 
 // Set the decimal mode flag
-void CPU::SED (address_mode mode) {
-    push_events({{&CPU::sed, NULL}});
+void SED (address_mode mode) {
+    push_events({{&sed, NULL}});
 }
 
 // Set the interrupt disable flag
-void CPU::SEI (address_mode mode) {
-    push_events({{&CPU::sei, NULL}});
+void SEI (address_mode mode) {
+    push_events({{&sei, NULL}});
 }
 
 // Store the value of the accumulator in the memory address
-void CPU::STA (address_mode mode) {
-    push_events_write(mode, &CPU::sta);
+void STA (address_mode mode) {
+    push_events_write(mode, &sta);
 }
 
 // Store X in the memory address
-void CPU::STX (address_mode mode) {
-    push_events_write(mode, &CPU::stx);
+void STX (address_mode mode) {
+    push_events_write(mode, &stx);
 }
 
 // Store Y in the memory address
-void CPU::STY (address_mode mode) {
-    push_events_write(mode, &CPU::sty);
+void STY (address_mode mode) {
+    push_events_write(mode, &sty);
 }
 
 // Transfer the accumulator to X
-void CPU::TAX (address_mode mode) {
-    push_events({{&CPU::tax, NULL}});
+void TAX (address_mode mode) {
+    push_events({{&tax, NULL}});
 }
 
 // Transfer the accumulator to Y
-void CPU::TAY (address_mode mode) {
-    push_events({{&CPU::tay, NULL}});
+void TAY (address_mode mode) {
+    push_events({{&tay, NULL}});
 }
 
 // Transfer SP to X
-void CPU::TSX (address_mode mode) {
-    push_events({{&CPU::tsx, NULL}});
+void TSX (address_mode mode) {
+    push_events({{&tsx, NULL}});
 }
 
 // Transfer X to the accumulator
-void CPU::TXA (address_mode mode) {
-    push_events({{&CPU::txa, NULL}});
+void TXA (address_mode mode) {
+    push_events({{&txa, NULL}});
 }
 
 // Transfer X to the stack pointer
-void CPU::TXS (address_mode mode) {
-    push_events({{&CPU::txs, NULL}});
+void TXS (address_mode mode) {
+    push_events({{&txs, NULL}});
 }
 
 // Transfer Y to the accumulator
-void CPU::TYA (address_mode mode) {
-    push_events({{&CPU::tya, NULL}});
+void TYA (address_mode mode) {
+    push_events({{&tya, NULL}});
 }
 
 
 // Decode the currently held opcode
-void CPU::decode () {
+void decode () {
 	switch (opcode) {
 		case 0x69:  ADC(IMM);   break;
         case 0x6D:  ADC(ABS);   break;
