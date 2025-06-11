@@ -1,5 +1,5 @@
 # NES || IN PROGRESS ||
-NES Emulator written in C++ using OpenGL for rendering and either GLFW or SDL for window/input management, and an audio library TBD. 
+NES Emulator written in C++ using SDL for graphics, and an audio library TBD. 
 
 Thanks to:
 
