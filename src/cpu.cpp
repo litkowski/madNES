@@ -624,48 +624,56 @@ void asl_dbus () {
  */
 void bcc () {
     if (!(status & CARRY_FLAG)) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bcs () {
     if (status & CARRY_FLAG) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void beq () {
     if (status & ZERO_FLAG) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bmi () {
     if (status & NEGATIVE_FLAG) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bne () {
     if (!(status & ZERO_FLAG)) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bpl () {
     if (!(status & ZERO_FLAG)) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bvc () {
     if (!(status & OVERFLOW_FLAG)) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }
 
 void bvs () {
     if (status & OVERFLOW_FLAG) {
+        event_queue.pop_front();
         event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
     }
 }

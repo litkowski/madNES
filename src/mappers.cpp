@@ -54,9 +54,9 @@ uint8_t NROM::cpu_read (uint16_t addr) {
     } else if (addr <= 0x1FFF) {
         return cpu_memory[addr % 0x0800];
     } else if (addr <= 0x2007) {
-        return cpu_memory[addr];
-    } else if (addr <= 0x3FFF) {
-        return cpu_memory[0x4000 + (addr % 0x0008)];
+        return read_ppu_from_cpu(addr % 0x0008);
+    } else if (addr == 0x4014) {
+        return read_ppu_from_cpu(addr % 16);
     } else if (addr <= 0x4017) {
         return cpu_memory[addr];
     } else if (addr <= 0x401F) {
@@ -123,9 +123,9 @@ void NROM::cpu_write (uint16_t addr, uint8_t data) {
     } else if (addr <= 0x1FFF) {
         cpu_memory[addr % 0x0800] = data;
     } else if (addr <= 0x2007) {
-        cpu_memory[addr] = data;
-    } else if (addr <= 0x3FFF) {
-        cpu_memory[0x4000 + (addr % 0x0008)] = data;
+        write_ppu_from_cpu(addr % 0x0008, data);
+    } else if (addr == 0x4014) {
+        write_ppu_from_cpu(addr % 16, data);
     } else if (addr <= 0x4017) {
         cpu_memory[addr] = data;
     } else if (addr <= 0x401F) {

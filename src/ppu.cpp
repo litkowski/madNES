@@ -345,9 +345,11 @@ void cycle_ppu () {
 	if (cycles_left == 0) {
 		if (PPUSTATUS & VBLANK_ACTIVE) {
 			signal_nmi();
+			PPUSTATUS |= VBLANK_ACTIVE;
 			cycles_left = 7140;
 		} else {
 			render_frame();
+			PPUSTATUS &= ~VBLANK_ACTIVE;
 			cycles_left = 81940;
 		}
 	}
