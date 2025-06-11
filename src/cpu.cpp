@@ -228,7 +228,7 @@ void Init_CPU (Cartridge* mapper) {
     // Start the CPU at the first instruction
     push_events({});
 
-    log.open("./log.txt", std::ios::trunc);
+    cpu_log.open("./log.txt", std::ios::trunc);
 }
 
 // Helper function to push a range of atomic operations to the event queue
@@ -1153,315 +1153,376 @@ void push_events_write (address_mode mode, void (*func) ()) {
 
 // Add the data, as specified through addressing, to the accumulator
 void ADC (address_mode mode) {
-    log << "ADC\n";
+    cpu_log << "ADC\n";
     push_events_read(mode, &adc_acc);
 }
 
 // AND the specified data to the accumulator
 void AND (address_mode mode) {
+    cpu_log << "AND\n";
     push_events_read(mode, &and_acc);
 }
 
 // Shift the accumulator left one bit
 void ASLA (address_mode mode) {
+    cpu_log << "ASLA\n";
     push_events({{&asl_acc, NULL}});
 }
 
 // Shift the data left by one bit
 void ASL (address_mode mode) {
+    cpu_log << "ASL\n";
     push_events_read_mod_write(mode, &asl_dbus);
 }
 
 /* BRANCH INSTRUCTIONS */
 void BCC (address_mode mode) {
+    cpu_log << "BCC\n";
     push_events({{&fetch_data_pc, &bcc}});
 }
 
 void BCS (address_mode mode) {
+    cpu_log << "BCS\n";
     push_events({{&fetch_data_pc, &bcs}});
 }
 
 void BEQ (address_mode mode) {
+    cpu_log << "BEQ\n";
     push_events({{&fetch_data_pc, &beq}});
 }
 
 void BMI (address_mode mode) {
+    cpu_log << "BMI\n";
     push_events({{&fetch_data_pc, &bmi}});
 }
 
 void BNE (address_mode mode) {
+    cpu_log << "BNE\n";
     push_events({{&fetch_data_pc, &bne}});
 }
 
 void BPL (address_mode mode) {
+    cpu_log << "BPL\n";
     push_events({{&fetch_data_pc, &bpl}});
 }
 
 void BVC (address_mode mode) {
+    cpu_log << "BVC\n";
     push_events({{&fetch_data_pc, &bvc}});
 }
 
 void BVS (address_mode mode) {
+    cpu_log << "BVS\n";
     push_events({{&fetch_data_pc, &bvs}});
 }
 
 // AND the memory location with the accumulator, but do not save the result
 void BIT (address_mode mode) {
+    cpu_log << "BIT\n";
     switch (mode) {
         case ABS:
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL}, {&fetch_data_abus, &bit}});
+            break;
         case ZP:
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &bit}});
+            break;
     }
 }
 
 // Undergo a voluntary interrupt. Pushes PC to the stack first, then status,
 // and finally reads the handler address from 0xFFFE - 0xFFFF
 void BRK (address_mode mode) {
+    cpu_log << "BRK\n";
     push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
                 {&push_p_irq, &dec_sp}, {&fetch_pcl_irq, NULL}, {&fetch_pch_irq, NULL}});
 }
 
 // Clear the carry bit
 void CLC (address_mode mode) {
+    cpu_log << "CLC\n";
     push_events({{&clc, NULL}});
 }
 
 // Clear the decimal flag. NOTE: The decimal mode is disabled on the NES
 void CLD (address_mode mode) {
+    cpu_log << "CLD\n";
     push_events({{&cld, NULL}});
 }
 
 // Clear the interrupt disable flag
 void CLI (address_mode mode) {
+    cpu_log << "CLI\n";
     push_events({{&cli, NULL}});
 }
 
 // Clear the overflow flag
 void CLV (address_mode mode) {
+    cpu_log << "CLV\n";
     push_events({{&clv, NULL}});
 }
 
 // Compare the value of the memory location with the accumulator
 void CMP (address_mode mode) {
+    cpu_log << "CMP\n";
     push_events_read(mode, &cmp);
 }
 
 // Compare the memory with X
 void CPX (address_mode mode) {
+    cpu_log << "CPX\n";
     push_events_read(mode, &cpx);
 }
 
 // Compare the memory with Y
 void CPY (address_mode mode) {
+    cpu_log << "CPY\n";
     push_events_read(mode, &cpy);
 }
 
 // Decrement the memory location by one
 void DEC (address_mode mode) {
+    cpu_log << "DEC\n";
     push_events_read_mod_write(mode, &dec);
 }
 
 // Decrement the X register by one
 void DEX (address_mode mode) {
+    cpu_log << "DEX\n";
     push_events({{&dex, NULL}});
 }
 
 // Decrement the Y register by one
 void DEY (address_mode mode) {
+    cpu_log << "DEY\n";
     push_events({{&dey, NULL}});
 }
 
 // Perform an XOR on the memory location with acc, save it in acc
 void EOR (address_mode mode) {
+    cpu_log << "EOR\n";
     push_events_read(mode, &eor);
 }
 
 // Increment the memory location by one
 void INC (address_mode mode) {
+    cpu_log << "INC\n";
     push_events_read_mod_write(mode, &inc);
 }
 
 // Increment X by one
 void INX (address_mode mode) {
+    cpu_log << "INX\n";
     push_events({{&inx, NULL}});
 }
 
 // Increment Y by one
 void INY (address_mode mode) {
+    cpu_log << "INY\n";
     push_events({{&iny, NULL}});
 }
 
 // Set PC to a new location
 void JMP (address_mode mode) {
+    cpu_log << "JMP\n";
     switch (mode) {
         case ABS:
             push_events({{&fetch_data_pc, NULL}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
+            break;
         case ABSI:
             push_events({{&fetch_ladd_pc, &inc_pc}, {&fetch_hadd_pc, &inc_pc},
                 {&fetch_data_abus, &inc_ladd_no_fix}, {&copy_dbus_pcl, &fetch_abus_to_pch}});
+            break;
     }
 }
 
 // Jump to subroutine; i.e. set PC to a new location and push current state on the stack
 void JSR (address_mode mode) {
+    cpu_log << "JSR\n";
     push_events({{&fetch_data_pc, NULL}, {&nop, NULL}, {&push_pch, &dec_sp},
         {&push_pcl, &dec_sp}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
 }
 
 // Load the accumulator with the memory from the address specified
 void LDA (address_mode mode) {
+    cpu_log << "LDA\n";
     push_events_read(mode, &lda);
 }
 
 // Load X with the memory from the address specified
 void LDX (address_mode mode) {
+    cpu_log << "LDX\n";
     push_events_read(mode, &ldx);
 }
 
 // Load Y with the memory from the address specified
 void LDY (address_mode mode) {
+    cpu_log << "LDY\n";
     push_events_read(mode, &ldy);
 }
 
 // Shift the accumulator right by one
 void LSRA (address_mode mode) {
+    cpu_log << "LSRA\n";
     push_events({{&lsr_acc, NULL}});
 }
 
 // Shift the memory location right by one
 void LSR (address_mode mode) {
+    cpu_log << "LSR\n";
     push_events_read(mode, &lsr_dbus);
 }
 
 // Do nothing for a cycle
 void NOP (address_mode mode) {
+    cpu_log << "NOP\n";
     push_events({{&nop, NULL}});
 }
 
 // Perform a bitwise OR with the memory location and accumulator
 void ORA (address_mode mode) {
+    cpu_log << "ORA\n";
     push_events_read(mode, &ora);
 }
 
 // Push the accumulator onto the stack
 void PHA (address_mode mode) {
+    cpu_log << "PHA\n";
     push_events({{&nop, NULL}, {&push_acc, &dec_sp}});
 }
 
 // Push the status register onto the stack
 void PHP (address_mode mode) {
+    cpu_log << "PHP\n";
     push_events({{&nop, NULL}, {&push_p_irq, &dec_sp}});
 }
 
 // Pop the accumulator from the stack
 void PLA (address_mode mode) {
+    cpu_log << "PLA\n";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_acc, NULL}});
 }
 
 // Pop the status register from the stack
 void PLP (address_mode mode) {
+    cpu_log << "PLP\n";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_p, NULL}});
 }
 
-// NOTE: Rotation is specified in the rol_acc/dbus and ror_acc/dbus functions
 // Rotate the accumulator left.
 void ROLA (address_mode mode) {
+    cpu_log << "ROLA\n";
     push_events({{&rol_acc, NULL}});
 }
 
 // Rotate the memory address left
 void ROL (address_mode mode) {
+    cpu_log << "ROL\n";
     push_events_read_mod_write(mode, &rol_dbus);
 }
 
 // Rotate the accumulator right
 void RORA (address_mode mode) {
+    cpu_log << "RORA\n";
     push_events({{&ror_acc, NULL}});
 }
 
 // Rotate the memory address right
 void ROR (address_mode mode) {
+    cpu_log << "ROR\n";
     push_events_read_mod_write(mode, &ror_dbus);
 }
 
 // Return from interrupt. Restores all status flags
 void RTI (address_mode mode) {
+    cpu_log << "RTI\n";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_p, &inc_sp},
         {&pop_pcl, &inc_sp}, {&pop_pch, NULL}});
 }
 
 // Return from subroutine. Does not restore flags, simply pops PC from the stack
 void RTS (address_mode mode) {
+    cpu_log << "RTS\n";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_pcl, &inc_sp},
         {&pop_pch, NULL}, {&inc_pc, NULL}});
 }
 
 // Subtract the value in memory from the accumulator, store in accumulator
 void SBC (address_mode mode) {
+    cpu_log << "SBC\n";
     push_events_read(mode, &sbc);
 }
 
 // Set the carry flag
 void SEC (address_mode mode) {
+    cpu_log << "SEC\n";
     push_events({{&sec, NULL}});
 }
 
 // Set the decimal mode flag
 void SED (address_mode mode) {
+    cpu_log << "SED\n";
     push_events({{&sed, NULL}});
 }
 
 // Set the interrupt disable flag
 void SEI (address_mode mode) {
+    cpu_log << "SEI\n";
     push_events({{&sei, NULL}});
 }
 
 // Store the value of the accumulator in the memory address
 void STA (address_mode mode) {
+    cpu_log << "STA\n";
     push_events_write(mode, &sta);
 }
 
 // Store X in the memory address
 void STX (address_mode mode) {
+    cpu_log << "STX\n";
     push_events_write(mode, &stx);
 }
 
 // Store Y in the memory address
 void STY (address_mode mode) {
+    cpu_log << "STY\n";
     push_events_write(mode, &sty);
 }
 
 // Transfer the accumulator to X
 void TAX (address_mode mode) {
+    cpu_log << "TAX\n";
     push_events({{&tax, NULL}});
 }
 
 // Transfer the accumulator to Y
 void TAY (address_mode mode) {
+    cpu_log << "TAY\n";
     push_events({{&tay, NULL}});
 }
 
 // Transfer SP to X
 void TSX (address_mode mode) {
+    cpu_log << "TSX\n";
     push_events({{&tsx, NULL}});
 }
 
 // Transfer X to the accumulator
 void TXA (address_mode mode) {
+    cpu_log << "TXA\n";
     push_events({{&txa, NULL}});
 }
 
 // Transfer X to the stack pointer
 void TXS (address_mode mode) {
+    cpu_log << "TXS\n";
     push_events({{&txs, NULL}});
 }
 
 // Transfer Y to the accumulator
 void TYA (address_mode mode) {
+    cpu_log << "TYA\n";
     push_events({{&tya, NULL}});
 }
-
 
 // Decode the currently held opcode
 void decode () {
