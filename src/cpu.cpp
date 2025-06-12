@@ -14,7 +14,7 @@
 #define NEGATIVE_FLAG 0b10000000
 
 // Log
-std::ofstream log;
+std::ofstream cpu_log;
 
 // Mapper
 Cartridge* game;
@@ -334,16 +334,12 @@ void write_data_abus () {
  */
 void add_dbus_pcl () {
 
-    uint8_t pcl = (uint8_t) pc & 0xFF;
-    pcl += dbus;
-
-    if (pc & 0xFF > pcl) {
+    if (((pc + (int8_t) dbus) & 0xF0) != (pc & 0xF0)) {
         status |= CARRY_FLAG;
-        event_queue.push_front({&fetch_opcode, &fix_pch});
+        event_queue.push_front({&nop, NULL});
     }
 
-    pc &= 0xFF00;
-    pc |= pcl;
+    pc += (int8_t) dbus;
 }
 
 /*
@@ -463,39 +459,39 @@ void inc_sp () {
 
 // Push the high byte of PC onto the stack
 void push_pch () {
-    game->cpu_write(sp, (uint8_t) (pc & 0xFF00) >> 8);
+    game->cpu_write(0x100 + sp, (uint8_t) ((pc & 0xFF00) >> 8));
 }
 
 // Pop the high byte of PC from the stack
 void pop_pch () {
     pc &= 0x00FF;
-    pc |= game->cpu_read(sp-1) << 8;
+    pc |= game->cpu_read(0x100 + sp) << 8;
 }
 
 // Push the low byte of PC onto the stack
 void push_pcl () {
-    game->cpu_write(sp, (uint8_t) (pc & 0x00FF));
+    game->cpu_write(0x100 + sp, (uint8_t) (pc & 0x00FF));
 }
 
 // Pop the low byte of PC from the stack
 void pop_pcl () {
     pc &= 0xFF00;
-    pc |= game->cpu_read(sp-1);
+    pc |= game->cpu_read(0x100 + sp);
 }
 
 // Push the status register to the stack with the B flag set
 void push_p_irq () {
-    game->cpu_write(sp, status | B_FLAG | EXTRA_FLAG);
+    game->cpu_write(0x100 + sp, status | B_FLAG | EXTRA_FLAG);
 }
 
 // Push the status register to the stack with the B flag unset
 void push_p_nmi () {
-    game->cpu_write(sp, (status | EXTRA_FLAG) & ~B_FLAG);
+    game->cpu_write(0x100 + sp, (status | EXTRA_FLAG) & ~B_FLAG);
 }
 
 // Pop the status register from the stack
 void pop_p () {
-    status = game->cpu_read(sp - 1);
+    status = game->cpu_read(0x100 + sp);
 }
 
 // Fetch the low byte of the IRQ interrupt handler
@@ -527,9 +523,9 @@ void copy_dbus_pcl () {
 
 // Fetch data from PC to the high byte of PC
 void fetch_pc_to_pch () {
-    uint8_t pch = game->cpu_read(pc) << 8;
+    uint16_t pch = game->cpu_read(pc) << 8;
     pc &= 0x00FF;
-    pc |= pch << 8;
+    pc |= pch;
 }
 
 // Fetch data from the abus's address to the low byte of PC
@@ -640,49 +636,49 @@ void asl_dbus () {
  */
 void bcc () {
     if (!(status & CARRY_FLAG)) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void bcs () {
     if (status & CARRY_FLAG) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void beq () {
     if (status & ZERO_FLAG) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void bmi () {
     if (status & NEGATIVE_FLAG) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void bne () {
     if (!(status & ZERO_FLAG)) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void bpl () {
     if (!(status & ZERO_FLAG)) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void bvc () {
     if (!(status & OVERFLOW_FLAG)) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
 void bvs () {
     if (status & OVERFLOW_FLAG) {
-        event_queue.push_front({&fetch_opcode, &add_dbus_pcl});
+        event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
 
@@ -757,15 +753,16 @@ void cpx () {
 
 // Compare the value of the specified location with the Y register, set the status flags accordingly
 void cpy () {
+
     // Check to set the carry flag
-    if (dbus <= x) {
+    if (dbus <= y) {
         status |= CARRY_FLAG;
     } else {
         status &= ~ZERO_FLAG;
     }
 
     // Perform SIGNED subtraction on the accumulator and dbus
-    uint8_t result = x - dbus;
+    uint8_t result = y - dbus;
 
     // Check for zero and negative results
     set_zero_and_neg(result);
@@ -1232,7 +1229,7 @@ void BIT (address_mode mode) {
 // Undergo a voluntary interrupt. Pushes PC to the stack first, then status,
 // and finally reads the handler address from 0xFFFE - 0xFFFF
 void BRK (address_mode mode) {
-    cpu_log << "BRK\n";
+    cpu_log << "BRK PC = " << pc <<"\n";
     push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
                 {&push_p_irq, &dec_sp}, {&fetch_pcl_irq, NULL}, {&fetch_pch_irq, NULL}});
 }
