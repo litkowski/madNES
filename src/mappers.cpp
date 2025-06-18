@@ -39,6 +39,7 @@ NROM::NROM (struct ines_info rom_info, std::string filename) {
         throw std::runtime_error("NROM standard does not support trainer");
     } else {
         rom.read((char*) cpu_memory.data() + 0x8000, prg_rom_size);
+        rom.seekg(16 + prg_rom_size);
         rom.read((char*) ppu_memory.data(), chr_rom_size);
     }
 
@@ -143,36 +144,30 @@ void NROM::cpu_write (uint16_t addr, uint8_t data) {
 // Write to PPU memory, no mapping needed
 void NROM::ppu_write (uint16_t addr, uint8_t data) {
 
-    if (addr <= 0x0FFF) {
+    if (addr < 0x2000) {
         ppu_memory[addr] = data;
     } else if (addr <= 0x23FF) {
         ppu_memory[addr] = data;
     } else if (addr <= 0x27FF) {
-
         if (nametable_arrangement == VERT) {
             ppu_memory[addr] = data;
         } else {
             ppu_memory[0x2000 + ((addr - 0x2400) % 0x0400)] = data;
         }
-
     } else if (addr <= 0x2BFF) {
-
         if (nametable_arrangement == HORIZ) {
             ppu_memory[addr] = data;
         } else {
             ppu_memory[0x2000 + ((addr - 0x2800) % 0x0400)] = data;
         }
-
     } else if (addr <= 0x2FFF) {
-
         if (nametable_arrangement == VERT) {
             ppu_memory[0x2400 + ((addr - 0x2C00) % 0x0400)] = data;
         } else {
             ppu_memory[0x2800 + ((addr - 0x2C00) % 0x0400)] = data;
         }
-
     } else if (addr <= 0x3EFF) {
-        ppu_write(addr - 0x2000, data);
+        ppu_memory[addr] = data;
     } else if (addr <= 0x3F1F) {
         ppu_memory[addr] = data;
     } else if (addr <= 0x3FFF) {

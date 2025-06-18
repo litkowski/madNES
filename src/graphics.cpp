@@ -5,7 +5,10 @@
 
 SDL_Renderer* renderer;
 SDL_Window* window;
-uint8_t framebuffer[264][256];
+SDL_Texture* texture;
+
+// This integer must be signed, since -1 represents an invisible pixel
+int8_t framebuffer[264][256];
 
 struct color {
 	uint8_t red;
@@ -70,18 +73,43 @@ void Init_Graphics () {
 	}
 
     SDL_RenderSetLogicalSize(renderer, 256, 240);
+	// texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 256, 240);
 }
 
 // Render the framebuffer to the screen
 // Sleep for one 60th of a second after frame
 void push_frame_to_screen () {
-	for (int cur_x = 0; cur_x < 256; cur_x++) {
-		for (int cur_y = 0; cur_y < 240; cur_y++) {
+
+	/* Texture method
+	uint8_t* texture_framebuffer;
+	int pitch;
+
+	SDL_LockTexture(texture, NULL, (void**) &texture_framebuffer, &pitch);
+
+	for (int cur_y = 0; cur_y < 240; cur_y++) {
+		for (int cur_x = 0; cur_x < 256; cur_x++) {
 			struct color cur_color = master_palette[framebuffer[cur_x][cur_y]];
-			SDL_SetRenderDrawColor(renderer, cur_color.red, cur_color.green, cur_color.green, 255);
+			texture_framebuffer[cur_y * 240 * 3 + cur_x * 3 + 0] = cur_color.red;
+			texture_framebuffer[cur_y * 240 * 3 + cur_x * 3 + 1] = cur_color.green;
+			texture_framebuffer[cur_y * 240 * 3 + cur_x * 3 + 2] = cur_color.blue;
+
+		}
+	}
+
+	SDL_UnlockTexture(texture);
+	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderPresent(renderer);
+	// SDL_Delay(16);
+	*/
+
+	// Pixel method
+	for (int cur_y = 0; cur_y < 240; cur_y++) {
+		for (int cur_x = 0; cur_x < 256; cur_x++) {
+			struct color cur_color = master_palette[framebuffer[cur_x][cur_y]];
+			SDL_SetRenderDrawColor(renderer, cur_color.red, cur_color.green, cur_color.blue, 255);
 			SDL_RenderDrawPoint(renderer, cur_x, cur_y);
 		}
 	}
+
 	SDL_RenderPresent(renderer);
-	// SDL_Delay(16);
 }

@@ -10,10 +10,12 @@ void game_loop (Cartridge* game_cartridge) {
 	Init_Graphics();
 	Init_Master_Palette("./palette.pal");
 
-	while (1) {
+	/* while (1) {
 		cycle_cpu();
 		cycle_ppu();
 		cycle_ppu();
 		cycle_ppu();
-	}
+	} */
+
+	ppu_game_loop();
 }

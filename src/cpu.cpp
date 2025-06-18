@@ -1,6 +1,8 @@
 #include <deque>
 #include <array>
+#include <bitset>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include "cpu.hpp"
 
@@ -244,7 +246,7 @@ void push_events (std::vector<std::array<void (*) (), 2>> events) {
 /*
  * Execute one CPU cycle.
  */
- void cycle_cpu () {
+void cycle_cpu () {
 
     std::array<void (*) (), 2> functions =  event_queue.front();
     event_queue.pop_front();
@@ -260,7 +262,7 @@ void push_events (std::vector<std::array<void (*) (), 2>> events) {
 void signal_nmi () {
     // Remove the fetch/decode cycle that's currently queued
     event_queue.pop_back();
-    push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
+    push_events({{&nop, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
                 {&push_p_nmi, &dec_sp}, {&fetch_pcl_nmi, NULL}, {&fetch_pch_nmi, NULL}});
 }
 
@@ -279,6 +281,7 @@ void nop () {
 // Fetch the data at the address bus's pointer into the data bus
 void fetch_data_abus () {
 	dbus = game->cpu_read(abus);
+    cpu_log << std::hex << (int) dbus << "\n";
 }
 
 // Fetch the data at the program counter into the data bus
@@ -312,7 +315,10 @@ void fetch_ladd_abus () {
 
 // Fetch the data at the abus into the high byte of the address bus
 void fetch_hadd_abus () {
-	dbus = game->cpu_read(abus);
+    uint16_t abus_temp = abus;
+    abus = 0;
+    abus |= dbus;
+	dbus = game->cpu_read(abus_temp);
 	abus &= 0x00FF;
 	abus |= (dbus << 8);
 }
@@ -320,12 +326,14 @@ void fetch_hadd_abus () {
 
 // Fetch next opcode from PC
 void fetch_opcode () {
+    cpu_log << std::hex << pc << ": ";
 	opcode = dbus = game->cpu_read(pc);
 	pc++;
 }
 
 void write_data_abus () {
     game->cpu_write(abus, dbus);
+    cpu_log << std::hex << (int) dbus << "\n";
 }
 
 /*
@@ -496,23 +504,26 @@ void pop_p () {
 
 // Fetch the low byte of the IRQ interrupt handler
 void fetch_pcl_irq  () {
-    dbus = game->cpu_read(0xFFFE);
+    pc &= 0xFF00;
+    pc |= game->cpu_read(0xFFFE);
 }
 
 // Fetch the high byte of the IRQ interrupt handler
 void fetch_pch_irq () {
-    pc = 0;
-    pc = (game->cpu_read(0xFFFF) << 8) | dbus;
+    pc &= 0x00FF;
+    pc |= (game->cpu_read(0xFFFF) << 8);
 }
 
 // Fetch the low byte of the NMI interrupt handler
 void fetch_pcl_nmi () {
-    dbus = game->cpu_read(0xFFFA);
+    pc &= 0xFF00;
+    pc |= game->cpu_read(0xFFFA);
 }
 
 // Fetch the high byte of the NMI interrupt handler
 void fetch_pch_nmi () {
-    dbus = game->cpu_read(0xFFFB);
+    pc &= 0x00FF;
+    pc |= (game->cpu_read(0xFFFB) << 8);
 }
 
 // Copy the dbus to the low byte of PC
@@ -600,7 +611,7 @@ void asl_acc () {
         status &= ~CARRY_FLAG;
     }
 
-    acc << 1;
+    acc = acc << 1;
     acc &= 0b11111110;
 }
 
@@ -616,7 +627,7 @@ void asl_dbus () {
         status &= ~CARRY_FLAG;
     }
 
-    dbus << 1;
+    dbus = dbus << 1;
     dbus &= 0b11111110;
 }
 
@@ -812,7 +823,7 @@ void iny () {
 
 // Load the accumulator with the memory in dbus, set flags accordingly
 void lda () {
-    acc  = dbus;
+    acc = dbus;
     set_zero_and_neg(acc);
 }
 
@@ -837,7 +848,7 @@ void lsr_acc () {
         status &= ~CARRY_FLAG;
     }
 
-    acc >> 1;
+    acc = acc >> 1;
     acc &= 0b01111111;
     if (!acc) {
         status |= ZERO_FLAG;
@@ -857,7 +868,7 @@ void lsr_dbus () {
         status &= ~CARRY_FLAG;
     }
 
-    dbus >> 1;
+    dbus = dbus >> 1;
     dbus &= 0b01111111;
     if (!dbus) {
         status |= ZERO_FLAG;
@@ -876,12 +887,12 @@ void ora () {
 
 // Push the accumulator onto the stack
 void push_acc () {
-    game->cpu_write(sp, acc);
+    game->cpu_write(0x100 + sp, acc);
 }
 
 // Pop the accumulator from the stack
 void pop_acc () {
-    acc = game->cpu_read(sp - 1);
+    acc = game->cpu_read(0x100 + sp);
 }
 
 // Rotate the accumulator left; i.e. store the 7th bit in the carry flag,
@@ -1020,6 +1031,7 @@ void tax () {
 // Transfer acc to Y
 void tay () {
     y = acc;
+    cpu_log << std::hex << (int) acc << "\n";
     set_zero_and_neg(y);
 }
 
@@ -1084,9 +1096,8 @@ void push_events_read (address_mode mode, void (*func) ()) {
 				{&fetch_data_abus, func}});
             break;
 		case ZPIY:
-			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &inc_abus},
-				{&fetch_hadd_abus, &add_x_ladd_skip}, {&fetch_data_abus, &fix_add},
-				{&fetch_data_abus, func}});
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
+				{&fetch_hadd_abus, &add_y_ladd_skip}, {&fetch_data_abus, func}});
             break;
     }
 }
@@ -1096,7 +1107,7 @@ void push_events_read_mod_write (address_mode mode, void (*func) ()) {
     switch (mode) {
         case ABS:
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
-                {&fetch_data_abus, &asl_dbus}, {&write_data_abus, func},
+                {&fetch_data_abus, NULL}, {&write_data_abus, func},
                 {&write_data_abus, NULL}});
             break;
         case XABS:
@@ -1139,8 +1150,8 @@ void push_events_write (address_mode mode, void (*func) ()) {
                 {func, NULL}});
             break;
         case ZPIY:
-			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &inc_abus},
-				{&fetch_hadd_abus, &add_x_ladd}, {&fetch_data_abus, &fix_add},
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
+				{&fetch_hadd_abus, &add_y_ladd}, {&fetch_data_abus, &fix_add},
 				{func, NULL}});
             break;
     }
@@ -1326,7 +1337,7 @@ void JMP (address_mode mode) {
             push_events({{&fetch_data_pc, NULL}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
             break;
         case ABSI:
-            push_events({{&fetch_ladd_pc, &inc_pc}, {&fetch_hadd_pc, &inc_pc},
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
                 {&fetch_data_abus, &inc_ladd_no_fix}, {&copy_dbus_pcl, &fetch_abus_to_pch}});
             break;
     }
@@ -1523,6 +1534,7 @@ void TYA (address_mode mode) {
 
 // Decode the currently held opcode
 void decode () {
+
 	switch (opcode) {
 		case 0x69:  ADC(IMM);   break;
         case 0x6D:  ADC(ABS);   break;

@@ -34,7 +34,7 @@
 #define FLIP_SPRITE_HORIZ 0b01000000
 #define FLIP_SPRITE_VERT 0b10000000
 
-extern uint8_t framebuffer[264][256];
+extern int8_t framebuffer[264][256];
 extern Cartridge* game;
 
 struct sprite {
@@ -60,11 +60,10 @@ uint16_t v;
 uint16_t t;
 uint8_t w;
 
-// NOTE: May not need to be used, higher level emulation may suffice
-// uint8_t x;
-
 int frames;
 
+// NOTE: May not need to be used, higher level emulation may suffice
+// uint8_t x;
 struct sprite oam[64];
 
 // Current cycle in the frame
@@ -81,7 +80,7 @@ void Init_PPU (Cartridge* mapper) {
 	PPUCTRL = PPUMASK = PPUSTATUS = OAMADDR = OAMDATA = PPUDATA = OAMDMA = 0;
 	PPUSCROLL = PPUADDR = 0;
 	v = t = 0;
-	w = 0;
+	w = 8;
 	cycles_left = 0;
 	frames = 0;
 
@@ -98,27 +97,31 @@ void render_background_tile (uint8_t x, uint8_t y, uint16_t pattern_table_index,
 
 	// Copy the particular palette colors to the local palette
 	for (int i = 1; i < 4; i++) {
-		palette_colors[i] = game->ppu_read(0x3F00 + palette_index);
+		palette_colors[i] = game->ppu_read(0x3F00 + palette_index + i);
 	}
 
 	// Iterate through the tile, setting framebuffer values as needed
-	for (int i = 0; i < 8; i++) {
+	for (int y_in_tile = 0; y_in_tile < 8; y_in_tile++) {
 
 		// Extract the current line's information from the pattern table
-		uint8_t tile1 = game->ppu_read(pattern_table_index + i);
-		uint8_t tile2 = game->ppu_read(pattern_table_index + i + 8);
+		uint8_t tile1 = game->ppu_read(pattern_table_index + y_in_tile);
+		uint8_t tile2 = game->ppu_read(pattern_table_index + y_in_tile + 8);
 
 		// Render the current line
-		for (int j = 0; j < x * 8 + 8; j++) {
-			int color_index = ((tile1 & (1 << j)) >> j) + ((tile1 & (1 << j)) >> j) * 2;
-			framebuffer[x * 8 + j][y * 8 + i] = palette_colors[color_index];
+		for (int x_in_tile = 0; x_in_tile < 8; x_in_tile++) {
+			int color_index = ((tile1 & (1 << x_in_tile)) >> x_in_tile) + ((tile1 & (1 << x_in_tile)) >> x_in_tile) * 2;
+			framebuffer[x + x_in_tile][y + y_in_tile] = palette_colors[color_index];
 		}
 	}
+
 }
 
+// Render sprite 0 to the framebuffer, return the cycle sprite 0 hit occurs
+int render_sprite_0 () {
+	return 0;
+}
 
 // Render a sprite to the framebuffer
-// TODO: Implement sprite 0 hits and sprite overlapping
 void render_sprite (struct sprite sprite) {
 
 	// Copy the universal background color to the local palette
@@ -223,8 +226,8 @@ void render_sprite (struct sprite sprite) {
 
 }
 
-// Render an entire frame and reset the cycle count
-void render_frame () {
+// Render the entire background
+void render_background () {
 
 	// Reset the framebuffer
 	std::memset(framebuffer, 0, 264 * 256);
@@ -237,58 +240,72 @@ void render_frame () {
 	first_tile += ((PPUSCROLL & 0xFF00) >> 8) * 32;
 	first_tile += PPUSCROLL & 0xFF;
 
-	if (PPUMASK & ENABLE_BACKGROUND) {
+	// Loop through all tiles, rendering from nametables
+	for (int y_in_frame = 0; y_in_frame < 30; y_in_frame++) {
 
-		// Loop through all tiles, rendering from OAM and nametables
-		for (int i = 0; i < 30; i++) {
+		uint16_t cur_line_index = first_tile;
+		uint8_t x_in_nametable = 0;
 
-			uint16_t cur_line_index = first_tile;
-			uint8_t cur_x_index = 0;
+		// Color the background
+		for (int x_in_frame = 0; x_in_frame < 32; x_in_frame++) {
 
-			// Color the background
-			for (int j = 0; j < 32; j++)
-
-				// Check for wraparound
-				if (cur_x_index + (cur_line_index % 32) > 31) {
-					if (cur_line_index % 0x800 > 0x400) {
-						cur_line_index -= 400;
-					} else {
-						cur_line_index += 0x400;
-					}
-					cur_line_index &= 0xF0;
-					cur_x_index = 0;
+			// Check for wraparound
+			if (x_in_nametable + (cur_line_index % 32) > 31) {
+				if (cur_line_index % 0x800 > 0x400) {
+					cur_line_index -= 400;
+				} else {
+					cur_line_index += 0x400;
 				}
-
-				// Extract the current tile
-				uint8_t cur_tile = game->ppu_read(cur_line_index + cur_x_index);
-
-				// Locate the current tile's y-coordinate
-				uint8_t cur_y_index = (cur_line_index % 0x400) / 32;
-
-				// Extract the currently chosen palette
-				uint8_t cur_palette = game->ppu_read((cur_tile & 0xFC00) + 0x3C0 + (cur_y_index / 4) * 8 + (cur_x_index / 4));
-				uint8_t corner = (cur_x_index % 2) / 2 + (cur_y_index % 2);
-				uint8_t active_palette = (cur_palette & 0b11 << (corner * 2)) >> (corner * 2);
-
-				// Extract the tile information from the pattern table
-				uint16_t pattern_table_index = ((PPUCTRL & BACKGROUND_PATTERN) >> 4) * 0x1000 + (cur_tile << 4);
-
-				// Add the tile to the framebuffer
-				render_background_tile(cur_x_index, cur_y_index, pattern_table_index, active_palette);
-				cur_x_index++;
+				cur_line_index &= 0xF0;
+				x_in_nametable = 0;
 			}
 
-			// Render the frame
-			first_tile += 32;
-			first_tile = first_tile % 0x1000 + 0x2000;
+			// Extract the current tile
+			uint8_t cur_tile = game->ppu_read(cur_line_index + x_in_nametable);
+
+			// Locate the current tile's y-coordinate
+			uint8_t y_in_nametable = (cur_line_index % 0x400) / 32;
+
+			// Find the attribute table index from the tile index
+			uint16_t attribute_table_index = (cur_line_index & 0xFC00);
+			attribute_table_index += 0x3C0;
+			attribute_table_index += ((y_in_nametable / 4) * 8);
+			attribute_table_index += (x_in_nametable / 4);
+
+			// Extract the currently chosen palette
+			uint8_t cur_palette = game->ppu_read(attribute_table_index);
+			uint8_t corner = (x_in_nametable % 2) / 2 + (y_in_nametable % 2);
+			uint8_t active_palette = (cur_palette & (0b11 << (corner * 2))) >> (corner * 2);
+
+			// Extract the tile information from the pattern table
+			uint16_t pattern_table_index = ((PPUCTRL & BACKGROUND_PATTERN) >> 4) * 0x1000 + (cur_tile << 4);
+
+			// Add the tile to the framebuffer
+			render_background_tile(x_in_frame * 8, y_in_frame * 8, pattern_table_index, active_palette);
+			x_in_nametable++;
 		}
 
-	// Render sprites
+		// Render the frame
+		first_tile += 32;
+		first_tile = first_tile % 0x1000 + 0x2000;
+	}
+
+	// push_frame_to_screen();
+}
+
+// Render all sprites. Returns the first cycle to
+int render_sprites () {
+
+	// Work backwards for proper sprite overlapping
 	if (PPUMASK & ENABLE_SPRITES) {
-		for (int i = 0; i < 64; i++) {
+		for (int i = 63; i > 0; i--) {
 			render_sprite(oam[i]);
 		}
 	}
+
+	// Find the first cycle to trigger sprite 0 hit
+	render_sprite(oam[0]);
+	return 0;
 }
 
 // Copy a page of memory from the CPU's memory space to PPU OAM
@@ -305,6 +322,7 @@ void copy_oamdma (uint8_t address) {
 }
 
 // Modify the CPU memory-mapped registers of the PPU
+// TODO: Implement writes to PPU VRAM for nametables
 void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 	switch (addr) {
 		case 0x0:
@@ -317,27 +335,32 @@ void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 			OAMADDR = data;
 			break;
 		case 0x4:
-			// NOTE: May be memory unsafe
 			OAMDATA = data;
-			((uint8_t*) oam)[OAMADDR] = data;
+			((uint8_t*) oam)[OAMADDR & 0b01111111] = data;
 			OAMADDR++;
 			break;
 		case 0x5:
-			PPUSCROLL &= (~(0xF << v));
-			PPUSCROLL |= (data << v);
-			w ^ 1;
+			PPUSCROLL &= (~(0xFF << w));
+			PPUSCROLL |= (data << w);
+			w = w ^ 8;
 			break;
 		case 0x6:
-			PPUADDR &= (~(0xF << v));
-			PPUADDR |= (data << v);
-			w ^ 1;
+			PPUADDR &= (~(0xFF << w));
+			PPUADDR |= (data << w);
+			w = w ^ 8;
 			break;
 		case 0x7:
 			PPUDATA = data;
+			game->ppu_write(PPUADDR, data);
+			if (PPUCTRL & VRAM_INCREMENT) {
+				PPUADDR += 32;
+			} else {
+				PPUADDR += 1;
+			}
 			break;
 		case 0x14:
 			OAMDMA = data;
-			// copy_oamdma(data);
+			copy_oamdma(data);
 			break;
 	}
 }
@@ -358,22 +381,53 @@ uint8_t read_ppu_from_cpu (uint8_t addr) {
 	return 0;
 }
 
-// Simulate one cycle of the PPU. If it's time to enter vblank or render
-// a new frame, then do so.
-void cycle_ppu () {
-	if (cycles_left == 0) {
-		if (PPUSTATUS & VBLANK_ACTIVE) {
-			// signal_nmi();
-			PPUSTATUS |= VBLANK_ACTIVE;
-			cycles_left = 7140;
-		} else {
-			frames++;
-			std::cout << "Frames rendered: " << frames << "\n";
-			render_frame();
-			push_frame_to_screen ();
-			PPUSTATUS &= ~VBLANK_ACTIVE;
-			cycles_left = 81940;
+// Loop the game
+void ppu_game_loop () {
+
+	while (1) {
+
+		// Reset sprite 0 hit
+		PPUSTATUS &= ~SPRITE_0;
+		int sprite_0_hit = 27248;
+
+		// Render the background
+		if (PPUMASK & ENABLE_BACKGROUND ) {
+			render_background();
 		}
+
+		push_frame_to_screen();
+
+		// Render sprites
+		if (PPUMASK & ENABLE_SPRITES) {
+			sprite_0_hit = render_sprites();
+		}
+
+		// push_frame_to_screen();
+		PPUSTATUS &= ~VBLANK_ACTIVE;
+
+		frames++;
+		std::cout << "Frames rendered: " << frames << "\n";
+
+		// Cycle CPU until sprite 0 hits
+		for (int i = 0; i < sprite_0_hit; i++) {
+			cycle_cpu();
+		}
+
+		PPUSTATUS |= SPRITE_0;
+
+		for (int i = sprite_0_hit; i < 27428; i++) {
+			cycle_cpu();
+		}
+
+		if (PPUCTRL & VBLANK_NMI) {
+			signal_nmi();
+		}
+
+		PPUSTATUS |= VBLANK_ACTIVE;
+
+		for (int i = 0; i < 2266; i++) {
+			cycle_cpu();
+		}
+
 	}
-	cycles_left--;
 }

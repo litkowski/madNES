@@ -1,0 +1,8 @@
+difficulties encountered:
+
+How to emulate PPU? Why I chose high-level emulation for it
+CPU addition for branches is SIGNED, not unsigned
+SDL: Don't render by pixel, use a texture instead
+Don't use a cycle_ppu() function, it's 10x slower
+
+18686 is current position, jump  to instruction, possible break?

@@ -6,9 +6,11 @@
 // Functions for game loop to use
 void Init_PPU (Cartridge* game_cartridge);
 void cycle_ppu ();
+void ppu_game_loop ();
 
 // Access to CPU memory-mapped PPU register
 void write_ppu_from_cpu (uint8_t addr, uint8_t data);
 uint8_t read_ppu_from_cpu (uint8_t addr);
+
 
 #endif
