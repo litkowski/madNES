@@ -221,9 +221,9 @@ void Init_CPU (Cartridge* mapper) {
 
 	// Assign all registers to their startup states
 	acc = x = y = 0;
-	pc = 0;
-    pc |= game->cpu_read(0xFFFC);
-    pc |= game->cpu_read(0xFFFD) << 8;
+	pc = 0xC000;
+    // pc |= game->cpu_read(0xFFFC);
+    // pc |= game->cpu_read(0xFFFD) << 8;
 	sp = 0xFD;
 	status = 0b00100100;
 
@@ -281,7 +281,6 @@ void nop () {
 // Fetch the data at the address bus's pointer into the data bus
 void fetch_data_abus () {
 	dbus = game->cpu_read(abus);
-    cpu_log << std::hex << (int) dbus << "\n";
 }
 
 // Fetch the data at the program counter into the data bus
@@ -326,14 +325,14 @@ void fetch_hadd_abus () {
 
 // Fetch next opcode from PC
 void fetch_opcode () {
-    cpu_log << std::hex << pc << ": ";
+    cpu_log.flush();
+    cpu_log << std::hex << std::uppercase << pc << ": ";
 	opcode = dbus = game->cpu_read(pc);
 	pc++;
 }
 
 void write_data_abus () {
     game->cpu_write(abus, dbus);
-    cpu_log << std::hex << (int) dbus << "\n";
 }
 
 /*
@@ -1065,37 +1064,46 @@ void tya () {
 void push_events_read (address_mode mode, void (*func) ()) {
     switch (mode) {
         case IMM:
+            cpu_log << "#$" << (int) game->cpu_read(pc);
 			push_events({{&fetch_data_pc, func}});
 			break;
 		case ABS:
+            cpu_log << "$" << (int) game->cpu_read(pc + 1) << (int) game->cpu_read(pc);
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
 				{&fetch_data_abus, func}});
 			break;
 		case XABS:
+            cpu_log << "$" << (int) game->cpu_read(pc + 1) << (int) game->cpu_read(pc) << ",X";
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd_skip},
 				{&fetch_data_abus, func}});
 			break;
 		case YABS:
+            cpu_log << "$" << (int) game->cpu_read(pc + 1) << (int) game->cpu_read(pc) << ",Y";
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd_skip},
 				{&fetch_data_abus, &fix_add}, {&fetch_data_abus, func}});
 			break;
 		case ZP:
+            cpu_log << "$" << (int) game->cpu_read(pc);
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, func}});
 			break;
 		case XZP:
+            cpu_log << "$" << (int) game->cpu_read(pc) << ",X";
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp},
 				{&fetch_data_abus, func}});
 			break;
         case YZP:
+            cpu_log << "$" << (int) game->cpu_read(pc) << ",Y";
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_y_zp},
 				{&fetch_data_abus, func}});
 			break;
 		case XZPI:
+            cpu_log << "($" << (int) game->cpu_read(pc) << ",X)";
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &add_x_zp},
 				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
 				{&fetch_data_abus, func}});
             break;
 		case ZPIY:
+            cpu_log << "($" << (int) game->cpu_read(pc) << "),Y";
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
 				{&fetch_hadd_abus, &add_y_ladd_skip}, {&fetch_data_abus, func}});
             break;
@@ -1144,6 +1152,9 @@ void push_events_write (address_mode mode, void (*func) ()) {
         case XZP:
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp}, {func, NULL}});
             break;
+        case YZP:
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_y_zp}, {func, NULL}});
+            break;
         case XZPI:
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &add_x_zp},
 				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
@@ -1161,19 +1172,19 @@ void push_events_write (address_mode mode, void (*func) ()) {
 
 // Add the data, as specified through addressing, to the accumulator
 void ADC (address_mode mode) {
-    cpu_log << "ADC\n";
+    cpu_log << "ADC";
     push_events_read(mode, &adc_acc);
 }
 
 // AND the specified data to the accumulator
 void AND (address_mode mode) {
-    cpu_log << "AND\n";
+    cpu_log << "AND";
     push_events_read(mode, &and_acc);
 }
 
 // Shift the accumulator left one bit
 void ASLA (address_mode mode) {
-    cpu_log << "ASLA\n";
+    cpu_log << "ASL A\n";
     push_events({{&asl_acc, NULL}});
 }
 
@@ -1534,6 +1545,9 @@ void TYA (address_mode mode) {
 
 // Decode the currently held opcode
 void decode () {
+
+    // // Log for debugging
+    cpu_log << opcode;
 
 	switch (opcode) {
 		case 0x69:  ADC(IMM);   break;

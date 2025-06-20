@@ -3,6 +3,7 @@
 
 #include "mappers.hpp"
 #include "ppu.hpp"
+#include "input.hpp"
 
 // Construct an NROM Cartridge object using iNES info
 NROM::NROM (struct ines_info rom_info, std::string filename) {
@@ -58,6 +59,10 @@ uint8_t NROM::cpu_read (uint16_t addr) {
         return read_ppu_from_cpu(addr % 0x0008);
     } else if (addr == 0x4014) {
         return read_ppu_from_cpu(addr % 16);
+    } else if (addr == 0x4016) {
+        return read_controller_1();
+    } else if (addr == 0x4017) {
+        return read_controller_2();
     } else if (addr <= 0x4017) {
         return cpu_memory[addr];
     } else if (addr <= 0x401F) {
@@ -126,7 +131,10 @@ void NROM::cpu_write (uint16_t addr, uint8_t data) {
     } else if (addr <= 0x2007) {
         write_ppu_from_cpu(addr % 0x0008, data);
     } else if (addr == 0x4014) {
-        write_ppu_from_cpu(addr % 16, data);
+        write_ppu_from_cpu(0x14, data);
+    } else if (addr == 0x4016) {
+        cpu_memory[addr] = data;
+        signal_input_poll();
     } else if (addr <= 0x4017) {
         cpu_memory[addr] = data;
     } else if (addr <= 0x401F) {

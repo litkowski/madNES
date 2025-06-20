@@ -14,6 +14,7 @@ set(SOURCES
 	src/cpu.cpp
 	src/graphics.cpp
 	src/ppu.cpp
+	src/input.cpp
 
 	include/main.hpp
 	include/parse_rom.hpp
@@ -23,6 +24,7 @@ set(SOURCES
 	include/cpu.hpp
 	include/ppu.hpp
 	include/graphics.hpp
+	include/input.hpp
 )
 
 find_package(SDL2 REQUIRED)

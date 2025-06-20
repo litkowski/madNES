@@ -110,10 +110,9 @@ void render_background_tile (uint8_t x, uint8_t y, uint16_t pattern_table_index,
 		// Render the current line
 		for (int x_in_tile = 0; x_in_tile < 8; x_in_tile++) {
 			int color_index = ((tile1 & (1 << x_in_tile)) >> x_in_tile) + ((tile1 & (1 << x_in_tile)) >> x_in_tile) * 2;
-			framebuffer[x + x_in_tile][y + y_in_tile] = palette_colors[color_index];
+			framebuffer[x + 7 - x_in_tile][y + y_in_tile] = palette_colors[color_index];
 		}
 	}
-
 }
 
 // Render sprite 0 to the framebuffer, return the cycle sprite 0 hit occurs
@@ -309,7 +308,7 @@ int render_sprites () {
 }
 
 // Copy a page of memory from the CPU's memory space to PPU OAM
-void copy_oamdma (uint8_t address) {
+void copy_oamdma (uint16_t address) {
 
 	uint8_t* oam_raw = (uint8_t*) oam;
 
@@ -360,7 +359,7 @@ void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 			break;
 		case 0x14:
 			OAMDMA = data;
-			copy_oamdma(data);
+			copy_oamdma(data << 8);
 			break;
 	}
 }
@@ -420,7 +419,7 @@ void ppu_game_loop () {
 		}
 
 		if (PPUCTRL & VBLANK_NMI) {
-			signal_nmi();
+			// signal_nmi();
 		}
 
 		PPUSTATUS |= VBLANK_ACTIVE;

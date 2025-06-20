@@ -7,7 +7,7 @@ void game_loop (Cartridge* game_cartridge) {
 
 	Init_CPU(game_cartridge);
 	Init_PPU(game_cartridge);
-	Init_Graphics();
+	Init_Graphics_And_IO();
 	Init_Master_Palette("./palette.pal");
 
 	/* while (1) {
