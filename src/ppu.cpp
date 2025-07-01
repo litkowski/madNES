@@ -383,7 +383,7 @@ uint8_t read_ppu_from_cpu (uint8_t addr) {
 // Loop the game
 void ppu_game_loop () {
 
-	while (1) {
+	// while (1) {
 
 		// Reset sprite 0 hit
 		PPUSTATUS &= ~SPRITE_0;
@@ -428,5 +428,5 @@ void ppu_game_loop () {
 			cycle_cpu();
 		}
 
-	}
+	// }
 }

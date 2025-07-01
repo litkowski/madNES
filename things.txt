@@ -10,3 +10,10 @@ c5d8 - nestest.nes input polling
 
 nestest.nes - after polling does:
 lsra, rol, dex,
+
+bug - using 0xF0 to test for page crossing instead of 0xFF00 for branch
+
+last problem solved - nestest cycle #585, ADC carry flag being set incorrectll
+
+current problem - around cycle 2547, weird issue because codes seem to be loaded
+into 0 when not encountering bugs. something with addressing modes? might need to change log so i can just run diff on it

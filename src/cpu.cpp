@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <iomanip>
 #include "cpu.hpp"
 
 #define CARRY_FLAG 0b00000001
@@ -17,6 +18,10 @@
 
 // Log
 std::ofstream cpu_log;
+uint64_t cycle;
+uint64_t ppu_scanline;
+uint64_t ppu_dot;
+uint8_t spaces;
 
 // Mapper
 Cartridge* game;
@@ -231,6 +236,13 @@ void Init_CPU (Cartridge* mapper) {
     push_events({});
 
     cpu_log.open("./log.txt", std::ios::trunc);
+
+    cycle = 6;
+    ppu_scanline = 0;
+    ppu_dot = 18;
+    spaces = 28;
+
+    cpu_log << std::setfill('0');
 }
 
 // Helper function to push a range of atomic operations to the event queue
@@ -247,6 +259,15 @@ void push_events (std::vector<std::array<void (*) (), 2>> events) {
  * Execute one CPU cycle.
  */
 void cycle_cpu () {
+
+    // Track cycles for logging
+    cycle++;
+    ppu_dot+= 3;
+
+    if (ppu_dot >= 341) {
+        ppu_scanline++;
+        ppu_dot = ppu_dot % 341;
+    }
 
     std::array<void (*) (), 2> functions =  event_queue.front();
     event_queue.pop_front();
@@ -326,7 +347,9 @@ void fetch_hadd_abus () {
 // Fetch next opcode from PC
 void fetch_opcode () {
     cpu_log.flush();
-    cpu_log << std::hex << std::uppercase << pc << ": ";
+    cpu_log << std::setw(4);
+    cpu_log << std::hex << std::uppercase << pc << "  ";
+    cpu_log << std::setw(2);
 	opcode = dbus = game->cpu_read(pc);
 	pc++;
 }
@@ -341,7 +364,7 @@ void write_data_abus () {
  */
 void add_dbus_pcl () {
 
-    if (((pc + (int8_t) dbus) & 0xF0) != (pc & 0xF0)) {
+    if (((pc + (int8_t) dbus) & 0xFF00) != (pc & 0xFF00)) {
         status |= CARRY_FLAG;
         event_queue.push_front({&nop, NULL});
     }
@@ -488,17 +511,17 @@ void pop_pcl () {
 
 // Push the status register to the stack with the B flag set
 void push_p_irq () {
-    game->cpu_write(0x100 + sp, status | B_FLAG | EXTRA_FLAG);
+    game->cpu_write(0x100 + sp, status | B_FLAG);
 }
 
 // Push the status register to the stack with the B flag unset
 void push_p_nmi () {
-    game->cpu_write(0x100 + sp, (status | EXTRA_FLAG) & ~B_FLAG);
+    game->cpu_write(0x100 + sp, (status) & ~B_FLAG);
 }
 
 // Pop the status register from the stack
 void pop_p () {
-    status = game->cpu_read(0x100 + sp);
+    status = ((game->cpu_read(0x100 + sp) | EXTRA_FLAG) & (~B_FLAG));
 }
 
 // Fetch the low byte of the IRQ interrupt handler
@@ -574,20 +597,20 @@ void set_zero_and_neg (uint8_t result) {
 
 // Add the contents of the data bus to the accumulator, with carry
 void adc_acc () {
-    uint8_t old_acc = acc;
-    acc += dbus;
+    int8_t old_acc = acc;
+    uint16_t new_acc = acc + (dbus + (status & CARRY_FLAG));
+    acc = (uint8_t) new_acc;
 
-	if (old_acc > acc) {
+	if (new_acc > 255) {
 		status |= CARRY_FLAG;
 	} else {
         status &= ~CARRY_FLAG;
     }
 
-    if ((old_acc ^ acc) & 0b10000000) {
-        status |= OVERFLOW_FLAG;
-    } else {
-        status &= ~OVERFLOW_FLAG;
-    }
+    status &= ~OVERFLOW_FLAG;
+    status |= ((acc ^ old_acc) & (acc ^ dbus) & NEGATIVE_FLAG) >> 1;
+
+    set_zero_and_neg(acc);
 }
 
 // Perform a bitwise AND operation on the accumulator
@@ -604,7 +627,7 @@ void and_acc () {
  */
 void asl_acc () {
 
-    if (acc & 0b1000000) {
+    if (acc & NEGATIVE_FLAG) {
         status |= CARRY_FLAG;
     } else {
         status &= ~CARRY_FLAG;
@@ -612,6 +635,8 @@ void asl_acc () {
 
     acc = acc << 1;
     acc &= 0b11111110;
+
+    set_zero_and_neg(acc);
 }
 
 /*
@@ -675,7 +700,7 @@ void bne () {
 }
 
 void bpl () {
-    if (!(status & ZERO_FLAG)) {
+    if (!(status & NEGATIVE_FLAG)) {
         event_queue.push_front({&add_dbus_pcl, NULL});
     }
 }
@@ -732,17 +757,17 @@ void clv () {
 // Compare the value of the specified location with the accumulator, set the status flags accordingly
 void cmp () {
     // Check to set the carry flag
-    if (dbus <= acc) {
+    if (acc >= dbus) {
         status |= CARRY_FLAG;
     } else {
-        status &= ~ZERO_FLAG;
+        status &= ~CARRY_FLAG;
     }
 
     // Perform SIGNED subtraction on the accumulator and dbus
-    uint8_t result = acc - dbus;
+    int8_t result = (int8_t) acc - (int8_t) dbus;
 
     // Check for zero and negative results
-    set_zero_and_neg(result);
+    set_zero_and_neg((uint8_t) result);
 }
 
 // Compare the value of the specified location with the X register, set the status flags accordingly
@@ -751,11 +776,11 @@ void cpx () {
     if (dbus <= x) {
         status |= CARRY_FLAG;
     } else {
-        status &= ~ZERO_FLAG;
+        status &= ~CARRY_FLAG;
     }
 
     // Perform SIGNED subtraction on the accumulator and dbus
-    uint8_t result = x - dbus;
+    int8_t result = (int8_t) x - (int8_t) dbus;
 
     // Check for zero and negative results
     set_zero_and_neg(result);
@@ -765,14 +790,14 @@ void cpx () {
 void cpy () {
 
     // Check to set the carry flag
-    if (dbus <= y) {
+    if (y >= dbus) {
         status |= CARRY_FLAG;
     } else {
-        status &= ~ZERO_FLAG;
+        status &= ~CARRY_FLAG;
     }
 
     // Perform SIGNED subtraction on the accumulator and dbus
-    uint8_t result = y - dbus;
+    int8_t result = (int8_t) y - (int8_t) dbus;
 
     // Check for zero and negative results
     set_zero_and_neg(result);
@@ -892,6 +917,7 @@ void push_acc () {
 // Pop the accumulator from the stack
 void pop_acc () {
     acc = game->cpu_read(0x100 + sp);
+    set_zero_and_neg(acc);
 }
 
 // Rotate the accumulator left; i.e. store the 7th bit in the carry flag,
@@ -905,12 +931,14 @@ void rol_acc () {
         status &= ~CARRY_FLAG;
     }
 
-    acc << 1;
+    acc = acc << 1;
     if (temp_status &= CARRY_FLAG) {
         acc |= 0b00000001;
     } else {
         acc &= 0b11111110;
     }
+
+    set_zero_and_neg(acc);
 }
 
 // Rotate the dbus left; i.e. store the 7th bit in the carry flag,
@@ -924,12 +952,14 @@ void rol_dbus () {
         status &= ~CARRY_FLAG;
     }
 
-    dbus << 1;
+    dbus = dbus << 1;
     if (temp_status &= CARRY_FLAG) {
         dbus |= 0b00000001;
     } else {
         dbus &= 0b11111110;
     }
+
+    set_zero_and_neg(dbus);
 }
 
 // Rotate the accumulator right; i.e. store the 7th bit in the carry flag,
@@ -937,18 +967,20 @@ void rol_dbus () {
 void ror_acc () {
     uint8_t temp_status = status;
 
-    if (acc & 0b00000001) {
+    if (acc & 0b1) {
         status |= CARRY_FLAG;
     } else {
         status &= ~CARRY_FLAG;
     }
 
-    acc >> 1;
+    acc = acc >> 1;
     if (temp_status &= CARRY_FLAG) {
         acc |= 0b10000000;
     } else {
         acc &= 0b01111111;
     }
+
+    set_zero_and_neg(acc);
 }
 
 // Rotate the dbus right; i.e. store the 7th bit in the carry flag,
@@ -962,18 +994,21 @@ void ror_dbus () {
         status &= ~CARRY_FLAG;
     }
 
-    dbus >> 1;
+    dbus = dbus >> 1;
     if (temp_status &= CARRY_FLAG) {
         dbus |= 0b10000000;
     } else {
         dbus &= 0b01111111;
     }
+
+    set_zero_and_neg(dbus);
 }
 
 // Subtract the value in the dbus from the accumulator.
 void sbc () {
-    int8_t result = ((int8_t) acc - (int8_t) dbus);
-    int16_t real_result = ((int16_t) acc) - ((int16_t) dbus);
+
+    int8_t old_acc = acc;
+    int8_t result = acc + ~dbus + (CARRY_FLAG & status);
 
     if (result >= 0) {
         status |= CARRY_FLAG;
@@ -981,11 +1016,8 @@ void sbc () {
         status &= ~CARRY_FLAG;
     }
 
-    if (result < real_result || result > real_result) {
-        status |= OVERFLOW_FLAG;
-    } else {
-        status &= ~OVERFLOW_FLAG;
-    }
+    status &= ~OVERFLOW_FLAG;
+    status |= ((result ^ old_acc) & (result ^ ~dbus) & NEGATIVE_FLAG) >> 1;
 
     set_zero_and_neg(result);
     acc = (uint8_t) result;
@@ -1030,7 +1062,6 @@ void tax () {
 // Transfer acc to Y
 void tay () {
     y = acc;
-    cpu_log << std::hex << (int) acc << "\n";
     set_zero_and_neg(y);
 }
 
@@ -1049,7 +1080,6 @@ void txa () {
 // Transfer X to SP
 void txs () {
     sp = x;
-    set_zero_and_neg(sp);
 }
 
 // Transfer Y to acc
@@ -1058,52 +1088,85 @@ void tya () {
     set_zero_and_neg(acc);
 }
 
+// Print the instruction input bytes after the opcode
+void print_instruction_bytes (address_mode mode) {
+    switch (mode) {
+        case IMM:
+        case ZP:
+        case XZP:
+        case YZP:
+        case XZPI:
+        case ZPIY:
+        case REL:
+            cpu_log << std::setw(2) << (int) game->cpu_read(pc) << "     ";
+            break;
+        case ABS:
+        case XABS:
+        case YABS:
+        case ABSI:
+            cpu_log << std::setw(2) << (int) game->cpu_read(pc) << " " << std::setw(2) << (int) game->cpu_read(pc + 1) << "  ";
+            break;
+        case ACC:
+        default:
+            cpu_log << "       ";
+    }
+}
+
 /* NOTE: Helper functions for generic instruction types begin here */
 
 // Generic read type function
 void push_events_read (address_mode mode, void (*func) ()) {
     switch (mode) {
         case IMM:
-            cpu_log << "#$" << (int) game->cpu_read(pc);
+            cpu_log << " #$" << std::setw(2) << (int) game->cpu_read(pc);
+            spaces -= 4;
 			push_events({{&fetch_data_pc, func}});
 			break;
 		case ABS:
-            cpu_log << "$" << (int) game->cpu_read(pc + 1) << (int) game->cpu_read(pc);
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc);
+            spaces -= 5;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
 				{&fetch_data_abus, func}});
 			break;
 		case XABS:
-            cpu_log << "$" << (int) game->cpu_read(pc + 1) << (int) game->cpu_read(pc) << ",X";
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",X";
+            spaces -= 7;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd_skip},
 				{&fetch_data_abus, func}});
 			break;
 		case YABS:
-            cpu_log << "$" << (int) game->cpu_read(pc + 1) << (int) game->cpu_read(pc) << ",Y";
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
+            spaces -= 7;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd_skip},
 				{&fetch_data_abus, &fix_add}, {&fetch_data_abus, func}});
 			break;
 		case ZP:
-            cpu_log << "$" << (int) game->cpu_read(pc);
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc);
+            spaces -= 3;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, func}});
 			break;
 		case XZP:
-            cpu_log << "$" << (int) game->cpu_read(pc) << ",X";
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << ",X";
+            spaces -= 5;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp},
 				{&fetch_data_abus, func}});
 			break;
         case YZP:
-            cpu_log << "$" << (int) game->cpu_read(pc) << ",Y";
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
+            spaces -= 5;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_y_zp},
 				{&fetch_data_abus, func}});
 			break;
 		case XZPI:
-            cpu_log << "($" << (int) game->cpu_read(pc) << ",X)";
-			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &add_x_zp},
+            cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << ",X)";
+            spaces -= 7;
+			push_events({{&fetch_ladd_pc, NULL}, {&add_x_zp, &nop},
 				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
 				{&fetch_data_abus, func}});
             break;
 		case ZPIY:
-            cpu_log << "($" << (int) game->cpu_read(pc) << "),Y";
+            cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << "),Y";
+            spaces -= 7;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
 				{&fetch_hadd_abus, &add_y_ladd_skip}, {&fetch_data_abus, func}});
             break;
@@ -1114,20 +1177,28 @@ void push_events_read (address_mode mode, void (*func) ()) {
 void push_events_read_mod_write (address_mode mode, void (*func) ()) {
     switch (mode) {
         case ABS:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc);
+            spaces -= 5;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
                 {&fetch_data_abus, NULL}, {&write_data_abus, func},
                 {&write_data_abus, NULL}});
             break;
         case XABS:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",X";
+            spaces -= 7;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_pc, &add_x_ladd},
                 {&fetch_data_abus, &fix_add}, {&fetch_data_abus, NULL},
                 {&write_data_abus, func}, {&write_data_abus, NULL}});
             break;
         case ZP:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc);
+            spaces -= 3;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, NULL},
                 {&write_data_abus, func}, {&write_data_abus, NULL}});
             break;
         case XZP:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << ",X";
+            spaces -= 5;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp},
 				{&fetch_data_abus, func}});
 			break;
@@ -1137,31 +1208,51 @@ void push_events_read_mod_write (address_mode mode, void (*func) ()) {
 // Generic simple write type functin
 void push_events_write (address_mode mode, void (*func) ()) {
     switch (mode) {
-        case ABS:
+        case ABS: {
+            uint16_t addr = 0;
+            addr |= game->cpu_read(pc);
+            addr |= (game->cpu_read(pc + 1) << 8);
+            cpu_log << " $" << std::setw(4) << addr << " = " << std::setw(2) << (int) game->cpu_read(addr);
+            spaces -= 10;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL}, {func, NULL}});
             break;
+        }
         case XABS:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",X";
+            spaces -= 7;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd}, {&fetch_data_abus, &fix_add}, {func, NULL}});
             break;
         case YABS:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
+            spaces -= 7;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd}, {&fetch_data_abus, &fix_add}, {func, NULL}});
             break;
         case ZP:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << " = " << std::setw(2) << (int) game->cpu_read(game->cpu_read(pc));
+            spaces -= 8;
             push_events({{&fetch_ladd_pc, NULL}, {func, NULL}});
             break;
         case XZP:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << ",X";
+            spaces -= 5;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp}, {func, NULL}});
             break;
         case YZP:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
+            spaces -= 5;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_y_zp}, {func, NULL}});
             break;
         case XZPI:
-			push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_abus, &add_x_zp},
+            cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << ",X)";
+			spaces -= 7;
+            push_events({{&fetch_ladd_pc, NULL}, {&add_x_zp, NULL},
 				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
                 {func, NULL}});
             break;
         case ZPIY:
-			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
+            cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << "),Y";
+			spaces -= 7;
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
 				{&fetch_hadd_abus, &add_y_ladd}, {&fetch_data_abus, &fix_add},
 				{func, NULL}});
             break;
@@ -1172,77 +1263,114 @@ void push_events_write (address_mode mode, void (*func) ()) {
 
 // Add the data, as specified through addressing, to the accumulator
 void ADC (address_mode mode) {
+    print_instruction_bytes(mode);
     cpu_log << "ADC";
     push_events_read(mode, &adc_acc);
 }
 
 // AND the specified data to the accumulator
 void AND (address_mode mode) {
+    print_instruction_bytes(mode);
     cpu_log << "AND";
     push_events_read(mode, &and_acc);
 }
 
 // Shift the accumulator left one bit
 void ASLA (address_mode mode) {
-    cpu_log << "ASL A\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ASL A ";
     push_events({{&asl_acc, NULL}});
 }
 
 // Shift the data left by one bit
 void ASL (address_mode mode) {
-    cpu_log << "ASL\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ASL";
     push_events_read_mod_write(mode, &asl_dbus);
 }
 
 /* BRANCH INSTRUCTIONS */
 void BCC (address_mode mode) {
-    cpu_log << "BCC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BCC";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bcc}});
 }
 
 void BCS (address_mode mode) {
-    cpu_log << "BCS\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BCS";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bcs}});
 }
 
 void BEQ (address_mode mode) {
-    cpu_log << "BEQ\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BEQ";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &beq}});
 }
 
 void BMI (address_mode mode) {
-    cpu_log << "BMI\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BMI";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bmi}});
 }
 
 void BNE (address_mode mode) {
-    cpu_log << "BNE\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BNE";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bne}});
 }
 
 void BPL (address_mode mode) {
-    cpu_log << "BPL\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BPL";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bpl}});
 }
 
 void BVC (address_mode mode) {
-    cpu_log << "BVC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BVC";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bvc}});
 }
 
 void BVS (address_mode mode) {
-    cpu_log << "BVS\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BVS";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) + (int) pc + 1;
+    spaces -= 5;
     push_events({{&fetch_data_pc, &bvs}});
 }
 
 // AND the memory location with the accumulator, but do not save the result
 void BIT (address_mode mode) {
-    cpu_log << "BIT\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BIT";
     switch (mode) {
-        case ABS:
+        case ABS:{
+            uint16_t addr = 0;
+            addr |= game->cpu_read(pc);
+            addr |= (game->cpu_read(pc) << 8);
+            cpu_log << " $" << std::setw(4) << addr << " = " << std::setw(2) << game->cpu_read(addr);
+            spaces -= 10;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL}, {&fetch_data_abus, &bit}});
             break;
+        }
         case ZP:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << " = " << std::setw(2) << (int) game->cpu_read(game->cpu_read(pc));;
+            spaces -= 8;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &bit}});
             break;
     }
@@ -1251,103 +1379,123 @@ void BIT (address_mode mode) {
 // Undergo a voluntary interrupt. Pushes PC to the stack first, then status,
 // and finally reads the handler address from 0xFFFE - 0xFFFF
 void BRK (address_mode mode) {
-    cpu_log << "BRK PC = " << pc <<"\n";
+    print_instruction_bytes(mode);
+    cpu_log << "BRK ";
     push_events({{&fetch_opcode, NULL}, {&push_pch, &dec_sp}, {&push_pcl, &dec_sp},
                 {&push_p_irq, &dec_sp}, {&fetch_pcl_irq, NULL}, {&fetch_pch_irq, NULL}});
 }
 
 // Clear the carry bit
 void CLC (address_mode mode) {
-    cpu_log << "CLC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CLC ";
     push_events({{&clc, NULL}});
 }
 
 // Clear the decimal flag. NOTE: The decimal mode is disabled on the NES
 void CLD (address_mode mode) {
-    cpu_log << "CLD\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CLD ";
     push_events({{&cld, NULL}});
 }
 
 // Clear the interrupt disable flag
 void CLI (address_mode mode) {
-    cpu_log << "CLI\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CLI ";
     push_events({{&cli, NULL}});
 }
 
 // Clear the overflow flag
 void CLV (address_mode mode) {
-    cpu_log << "CLV\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CLV ";
     push_events({{&clv, NULL}});
 }
 
 // Compare the value of the memory location with the accumulator
 void CMP (address_mode mode) {
-    cpu_log << "CMP\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CMP";
     push_events_read(mode, &cmp);
 }
 
 // Compare the memory with X
 void CPX (address_mode mode) {
-    cpu_log << "CPX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CPX";
     push_events_read(mode, &cpx);
 }
 
 // Compare the memory with Y
 void CPY (address_mode mode) {
-    cpu_log << "CPY\n";
+    print_instruction_bytes(mode);
+    cpu_log << "CPY";
     push_events_read(mode, &cpy);
 }
 
 // Decrement the memory location by one
 void DEC (address_mode mode) {
-    cpu_log << "DEC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "DEC";
     push_events_read_mod_write(mode, &dec);
 }
 
 // Decrement the X register by one
 void DEX (address_mode mode) {
-    cpu_log << "DEX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "DEX ";
     push_events({{&dex, NULL}});
 }
 
 // Decrement the Y register by one
 void DEY (address_mode mode) {
-    cpu_log << "DEY\n";
+    print_instruction_bytes(mode);
+    cpu_log << "DEY ";
     push_events({{&dey, NULL}});
 }
 
 // Perform an XOR on the memory location with acc, save it in acc
 void EOR (address_mode mode) {
-    cpu_log << "EOR\n";
+    print_instruction_bytes(mode);
+    cpu_log << "EOR";
     push_events_read(mode, &eor);
 }
 
 // Increment the memory location by one
 void INC (address_mode mode) {
-    cpu_log << "INC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "INC ";
     push_events_read_mod_write(mode, &inc);
 }
 
 // Increment X by one
 void INX (address_mode mode) {
-    cpu_log << "INX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "INX ";
     push_events({{&inx, NULL}});
 }
 
 // Increment Y by one
 void INY (address_mode mode) {
-    cpu_log << "INY\n";
+    print_instruction_bytes(mode);
+    cpu_log << "INY ";
     push_events({{&iny, NULL}});
 }
 
 // Set PC to a new location
 void JMP (address_mode mode) {
-    cpu_log << "JMP\n";
+    print_instruction_bytes(mode);
+    cpu_log << "JMP";
     switch (mode) {
         case ABS:
+            cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc);
+            spaces -= 5;
             push_events({{&fetch_data_pc, NULL}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
             break;
         case ABSI:
+            cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ")";
+            spaces -= 7;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, NULL},
                 {&fetch_data_abus, &inc_ladd_no_fix}, {&copy_dbus_pcl, &fetch_abus_to_pch}});
             break;
@@ -1356,190 +1504,223 @@ void JMP (address_mode mode) {
 
 // Jump to subroutine; i.e. set PC to a new location and push current state on the stack
 void JSR (address_mode mode) {
-    cpu_log << "JSR\n";
+    print_instruction_bytes(mode);
+    cpu_log << "JSR";
+    cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc);
+    spaces -= 5;
     push_events({{&fetch_data_pc, NULL}, {&nop, NULL}, {&push_pch, &dec_sp},
         {&push_pcl, &dec_sp}, {&fetch_pc_to_pch, &copy_dbus_pcl}});
 }
 
 // Load the accumulator with the memory from the address specified
 void LDA (address_mode mode) {
-    cpu_log << "LDA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "LDA";
     push_events_read(mode, &lda);
 }
 
 // Load X with the memory from the address specified
 void LDX (address_mode mode) {
-    cpu_log << "LDX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "LDX";
     push_events_read(mode, &ldx);
 }
 
 // Load Y with the memory from the address specified
 void LDY (address_mode mode) {
-    cpu_log << "LDY\n";
+    print_instruction_bytes(mode);
+    cpu_log << "LDY";
     push_events_read(mode, &ldy);
 }
 
 // Shift the accumulator right by one
 void LSRA (address_mode mode) {
-    cpu_log << "LSRA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "LSR A ";
     push_events({{&lsr_acc, NULL}});
 }
 
 // Shift the memory location right by one
 void LSR (address_mode mode) {
-    cpu_log << "LSR\n";
+    print_instruction_bytes(mode);
+    cpu_log << "LSR";
     push_events_read(mode, &lsr_dbus);
 }
 
 // Do nothing for a cycle
 void NOP (address_mode mode) {
-    cpu_log << "NOP\n";
+    print_instruction_bytes(mode);
+    cpu_log << "NOP ";
     push_events({{&nop, NULL}});
 }
 
 // Perform a bitwise OR with the memory location and accumulator
 void ORA (address_mode mode) {
-    cpu_log << "ORA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ORA";
     push_events_read(mode, &ora);
 }
 
 // Push the accumulator onto the stack
 void PHA (address_mode mode) {
-    cpu_log << "PHA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "PHA ";
     push_events({{&nop, NULL}, {&push_acc, &dec_sp}});
 }
 
 // Push the status register onto the stack
 void PHP (address_mode mode) {
-    cpu_log << "PHP\n";
+    print_instruction_bytes(mode);
+    cpu_log << "PHP ";
     push_events({{&nop, NULL}, {&push_p_irq, &dec_sp}});
 }
 
 // Pop the accumulator from the stack
 void PLA (address_mode mode) {
-    cpu_log << "PLA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "PLA ";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_acc, NULL}});
 }
 
 // Pop the status register from the stack
 void PLP (address_mode mode) {
-    cpu_log << "PLP\n";
+    print_instruction_bytes(mode);
+    cpu_log << "PLP ";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_p, NULL}});
 }
 
 // Rotate the accumulator left.
 void ROLA (address_mode mode) {
-    cpu_log << "ROLA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ROL A ";
     push_events({{&rol_acc, NULL}});
 }
 
 // Rotate the memory address left
 void ROL (address_mode mode) {
-    cpu_log << "ROL\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ROL";
     push_events_read_mod_write(mode, &rol_dbus);
 }
 
 // Rotate the accumulator right
 void RORA (address_mode mode) {
-    cpu_log << "RORA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ROR A ";
     push_events({{&ror_acc, NULL}});
 }
 
 // Rotate the memory address right
 void ROR (address_mode mode) {
-    cpu_log << "ROR\n";
+    print_instruction_bytes(mode);
+    cpu_log << "ROR";
     push_events_read_mod_write(mode, &ror_dbus);
 }
 
 // Return from interrupt. Restores all status flags
 void RTI (address_mode mode) {
-    cpu_log << "RTI\n";
+    print_instruction_bytes(mode);
+    cpu_log << "RTI ";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_p, &inc_sp},
         {&pop_pcl, &inc_sp}, {&pop_pch, NULL}});
 }
 
 // Return from subroutine. Does not restore flags, simply pops PC from the stack
 void RTS (address_mode mode) {
-    cpu_log << "RTS\n";
+    print_instruction_bytes(mode);
+    cpu_log << "RTS ";
     push_events({{&nop, NULL}, {&inc_sp, NULL}, {&pop_pcl, &inc_sp},
         {&pop_pch, NULL}, {&inc_pc, NULL}});
 }
 
 // Subtract the value in memory from the accumulator, store in accumulator
 void SBC (address_mode mode) {
-    cpu_log << "SBC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "SBC";
     push_events_read(mode, &sbc);
 }
 
 // Set the carry flag
 void SEC (address_mode mode) {
-    cpu_log << "SEC\n";
+    print_instruction_bytes(mode);
+    cpu_log << "SEC ";
     push_events({{&sec, NULL}});
 }
 
 // Set the decimal mode flag
 void SED (address_mode mode) {
-    cpu_log << "SED\n";
+    print_instruction_bytes(mode);
+    cpu_log << "SED ";
     push_events({{&sed, NULL}});
 }
 
 // Set the interrupt disable flag
 void SEI (address_mode mode) {
-    cpu_log << "SEI\n";
+    print_instruction_bytes(mode);
+    cpu_log << "SEI ";
     push_events({{&sei, NULL}});
 }
 
 // Store the value of the accumulator in the memory address
 void STA (address_mode mode) {
-    cpu_log << "STA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "STA";
     push_events_write(mode, &sta);
 }
 
 // Store X in the memory address
 void STX (address_mode mode) {
-    cpu_log << "STX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "STX";
     push_events_write(mode, &stx);
 }
 
 // Store Y in the memory address
 void STY (address_mode mode) {
-    cpu_log << "STY\n";
+    print_instruction_bytes(mode);
+    cpu_log << "STY";
     push_events_write(mode, &sty);
 }
 
 // Transfer the accumulator to X
 void TAX (address_mode mode) {
-    cpu_log << "TAX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "TAX ";
     push_events({{&tax, NULL}});
 }
 
 // Transfer the accumulator to Y
 void TAY (address_mode mode) {
-    cpu_log << "TAY\n";
+    print_instruction_bytes(mode);
+    cpu_log << "TAY ";
     push_events({{&tay, NULL}});
 }
 
 // Transfer SP to X
 void TSX (address_mode mode) {
-    cpu_log << "TSX\n";
+    print_instruction_bytes(mode);
+    cpu_log << "TSX ";
     push_events({{&tsx, NULL}});
 }
 
 // Transfer X to the accumulator
 void TXA (address_mode mode) {
-    cpu_log << "TXA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "TXA ";
     push_events({{&txa, NULL}});
 }
 
 // Transfer X to the stack pointer
 void TXS (address_mode mode) {
-    cpu_log << "TXS\n";
+    print_instruction_bytes(mode);
+    cpu_log << "TXS ";
     push_events({{&txs, NULL}});
 }
 
 // Transfer Y to the accumulator
 void TYA (address_mode mode) {
-    cpu_log << "TYA\n";
+    print_instruction_bytes(mode);
+    cpu_log << "TYA ";
     push_events({{&tya, NULL}});
 }
 
@@ -1547,7 +1728,7 @@ void TYA (address_mode mode) {
 void decode () {
 
     // // Log for debugging
-    cpu_log << opcode;
+    cpu_log << (int) opcode << " ";
 
 	switch (opcode) {
 		case 0x69:  ADC(IMM);   break;
@@ -1589,7 +1770,7 @@ void decode () {
 
         case 0x10:  BPL(REL);   break;
 
-        case 0x00:  BRK(IMPL); std::cout << "BRK";  break;
+        case 0x00:  BRK(IMPL);  break;
 
         case 0x50:  BVC(REL);   break;
 
@@ -1726,7 +1907,7 @@ void decode () {
 
         case 0x38:  SEC(IMPL);  break;
 
-        case 0xF8:  SEC(IMPL);  break;
+        case 0xF8:  SED(IMPL);  break;
 
         case 0x78:  SEI(IMPL);  break;
 
@@ -1760,5 +1941,21 @@ void decode () {
 
         default:    NOP(IMPL);  break;
 	}
+
+    cpu_log << std::string(spaces, ' ');
+    spaces = 28;
+	cpu_log << "A:" << std::setw(2) << (int) acc << " X:" << std::setw(2) << (int) x << " Y:"
+        << std::setw(2) << (int) y << " P:" << std::setw(2) << (int) status << " SP:" << std::setw(2) << (int) sp
+        << " PPU:"<< std::dec << std::setfill(' ') << std::right << std::setw(3) << (int) ppu_scanline << ","
+        << std::right << std::setw(3) << (int) ppu_dot << " CYC:" << (int) cycle << std::hex;
+
+    cpu_log << std::setfill('0');
+
+    // NOTE: Failure print, disabled so I can format log as found in the one online
+    /* if (game->cpu_read(0x00)) {
+        cpu_log << " FAILURE " << (int) game->cpu_read(0x00);
+    } */
+
+    cpu_log << "\n";
 }
 
