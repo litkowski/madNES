@@ -1592,7 +1592,7 @@ void PLP (address_mode mode) {
 // Rotate the accumulator left.
 void ROLA (address_mode mode) {
     print_instruction_bytes(mode);
-    cpu_log << "ROL A ";
+    cpu_log << "ROL A";
     push_events({{&rol_acc, NULL}});
 }
 
