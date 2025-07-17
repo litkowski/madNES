@@ -17,3 +17,5 @@ last problem solved - nestest cycle #585, ADC carry flag being set incorrectll
 
 current problem - around cycle 2547, weird issue because codes seem to be loaded
 into 0 when not encountering bugs. something with addressing modes? might need to change log so i can just run diff on it
+
+using push_events_read instead of push_events_read_mod_write for LSR dbus

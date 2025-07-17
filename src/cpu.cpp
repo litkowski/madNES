@@ -329,8 +329,6 @@ void fetch_hadd_pc () {
 // Fetch the data at the abus into the low byte of the address bus
 void fetch_ladd_abus () {
 	dbus = game->cpu_read(abus);
-	abus = 0;
-	abus |= dbus;
 }
 
 // Fetch the data at the abus into the high byte of the address bus
@@ -377,16 +375,7 @@ void add_dbus_pcl () {
  * NOTE: This version of the function will NOT skip if fixing is unnecessary
  */
 void add_x_ladd () {
-
-	uint8_t ladd = (uint8_t) abus;
-	abus &= 0xFF00;
-
-	if (ladd + x > 0x00FF) {
-		status |= CARRY_FLAG;
-	}
-
-	ladd += x;
-	abus |= ladd;
+    abus += x;
 }
 
 /*
@@ -395,16 +384,11 @@ void add_x_ladd () {
  */
  void add_x_ladd_skip () {
 
-	uint8_t ladd = (uint8_t) abus;
-	abus &= 0xFF00;
-
-	if (ladd + x > 0x00FF) {
-		status |= CARRY_FLAG;
-        event_queue.push_front({&fetch_data_abus, &fix_add});
+	if ((uint8_t) abus + x > 0x00FF) {
+        event_queue.push_front({&fetch_data_abus, NULL});
 	}
 
-	ladd += x;
-	abus |= ladd;
+	abus += x;
 }
 
 /*
@@ -412,16 +396,7 @@ void add_x_ladd () {
  * NOTE: This version of the function will NOT skip if fixing is unnecessary
  */
 void add_y_ladd () {
-
-	uint8_t ladd = (uint8_t) abus;
-	abus &= 0xFF00;
-
-	if (ladd + y > 0x00FF) {
-		status |= CARRY_FLAG;
-	}
-
-	ladd += y;
-	abus |= ladd;
+    abus += y;
 }
 
 /*
@@ -430,16 +405,11 @@ void add_y_ladd () {
  */
  void add_y_ladd_skip () {
 
-	uint8_t ladd = (uint8_t) abus;
-	abus &= 0xFF00;
-
-	if (ladd + y > 0x00FF) {
-		status |= CARRY_FLAG;
-        event_queue.push_front({&fetch_data_abus, &fix_add});
+	if ((uint8_t) abus + y > 0x00FF) {
+        event_queue.push_front({&fetch_data_abus, NULL});
 	}
 
-	ladd += y;
-	abus |= ladd;
+	abus += y;
 }
 
 // Add the contents of the X register to a zero page address
@@ -459,8 +429,8 @@ void add_y_zp () {
 // Fix the high byte of the address bus.
 // Only executed in cases of page crossings.
 void fix_add () {
-    if (status &= CARRY_FLAG) {
-        abus += 0x100;
+    if (status & CARRY_FLAG) {
+         abus += 0x100;
     }
 }
 
@@ -470,6 +440,12 @@ void fix_pch () {
     if (status &= CARRY_FLAG) {
         pc += 0x100;
     }
+}
+
+// Increment the low byte of the address, staying on the same page
+void inc_abus_zp () {
+    uint8_t* abus_low = (uint8_t*) &abus;
+    (*abus_low)++;
 }
 
 // Increment the abus by one
@@ -1138,7 +1114,7 @@ void push_events_read (address_mode mode, void (*func) ()) {
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
             spaces -= 7;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd_skip},
-				{&fetch_data_abus, &fix_add}, {&fetch_data_abus, func}});
+                {&fetch_data_abus, func}});
 			break;
 		case ZP:
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc);
@@ -1161,13 +1137,13 @@ void push_events_read (address_mode mode, void (*func) ()) {
             cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << ",X)";
             spaces -= 7;
 			push_events({{&fetch_ladd_pc, NULL}, {&add_x_zp, &nop},
-				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
+				{&fetch_ladd_abus, &inc_abus_zp}, {&fetch_hadd_abus, NULL},
 				{&fetch_data_abus, func}});
             break;
 		case ZPIY:
             cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << "),Y";
             spaces -= 7;
-			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
+			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus_zp},
 				{&fetch_hadd_abus, &add_y_ladd_skip}, {&fetch_data_abus, func}});
             break;
     }
@@ -1200,7 +1176,7 @@ void push_events_read_mod_write (address_mode mode, void (*func) ()) {
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << ",X";
             spaces -= 5;
 			push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &add_x_zp},
-				{&fetch_data_abus, func}});
+				{&fetch_data_abus, NULL}, {&write_data_abus, func}, {&write_data_abus, NULL}});
 			break;
     }
 }
@@ -1225,7 +1201,7 @@ void push_events_write (address_mode mode, void (*func) ()) {
         case YABS:
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
             spaces -= 7;
-            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd}, {&fetch_data_abus, &fix_add}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_y_ladd}, {&fetch_data_abus, NULL}, {func, NULL}});
             break;
         case ZP:
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc) << " = " << std::setw(2) << (int) game->cpu_read(game->cpu_read(pc));
@@ -1246,14 +1222,14 @@ void push_events_write (address_mode mode, void (*func) ()) {
             cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << ",X)";
 			spaces -= 7;
             push_events({{&fetch_ladd_pc, NULL}, {&add_x_zp, NULL},
-				{&fetch_ladd_abus, &inc_abus}, {&fetch_hadd_abus, NULL},
+				{&fetch_ladd_abus, &inc_abus_zp}, {&fetch_hadd_abus, NULL},
                 {func, NULL}});
             break;
         case ZPIY:
             cpu_log << " ($" << std::setw(2) << (int) game->cpu_read(pc) << "),Y";
 			spaces -= 7;
             push_events({{&fetch_ladd_pc, NULL}, {&fetch_data_abus, &inc_abus},
-				{&fetch_hadd_abus, &add_y_ladd}, {&fetch_data_abus, &fix_add},
+				{&fetch_hadd_abus, &add_y_ladd}, {&fetch_data_abus, NULL},
 				{func, NULL}});
             break;
     }
@@ -1465,7 +1441,7 @@ void EOR (address_mode mode) {
 // Increment the memory location by one
 void INC (address_mode mode) {
     print_instruction_bytes(mode);
-    cpu_log << "INC ";
+    cpu_log << "INC";
     push_events_read_mod_write(mode, &inc);
 }
 
@@ -1544,7 +1520,7 @@ void LSRA (address_mode mode) {
 void LSR (address_mode mode) {
     print_instruction_bytes(mode);
     cpu_log << "LSR";
-    push_events_read(mode, &lsr_dbus);
+    push_events_read_mod_write(mode, &lsr_dbus);
 }
 
 // Do nothing for a cycle
@@ -1747,7 +1723,7 @@ void decode () {
         case 0x25:  AND(ZP);    break;
         case 0x35:  AND(XZP);   break;
         case 0x21:  AND(XZPI);  break;
-        case 0x32:  AND(ZPIY);  break;
+        case 0x31:  AND(ZPIY);  break;
 
         case 0x0A:  ASLA(ACC);  break;
         case 0x0E:  ASL(ABS);   break;
@@ -1925,7 +1901,7 @@ void decode () {
 
         case 0x8C:  STY(ABS);   break;
         case 0x84:  STY(ZP);    break;
-        case 0x94:  STY(YZP);   break;
+        case 0x94:  STY(XZP);   break;
 
         case 0xAA:  TAX(IMPL);  break;
 
