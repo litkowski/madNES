@@ -3,6 +3,8 @@
 #include "graphics.hpp"
 #include <cstring>
 #include <iostream>
+#include <sstream>
+#include <fstream>
 
 // PPUCTRL flags
 #define NAMETABLE_CTRL 0b00000011
@@ -61,6 +63,9 @@ uint16_t t;
 uint8_t w;
 
 int frames;
+
+// CPU log, we include it so we can clear every frame
+extern std::ofstream cpu_log;
 
 // NOTE: May not need to be used, higher level emulation may suffice
 // uint8_t x;
@@ -289,7 +294,7 @@ void render_background () {
 		first_tile = first_tile % 0x1000 + 0x2000;
 	}
 
-	// push_frame_to_screen();
+	push_frame_to_screen();
 }
 
 // Render all sprites. Returns the first cycle to
@@ -383,7 +388,7 @@ uint8_t read_ppu_from_cpu (uint8_t addr) {
 // Loop the game
 void ppu_game_loop () {
 
-	// while (1) {
+	while (1) {
 
 		// Reset sprite 0 hit
 		PPUSTATUS &= ~SPRITE_0;
@@ -419,7 +424,7 @@ void ppu_game_loop () {
 		}
 
 		if (PPUCTRL & VBLANK_NMI) {
-			// signal_nmi();
+			signal_nmi();
 		}
 
 		PPUSTATUS |= VBLANK_ACTIVE;
@@ -428,5 +433,9 @@ void ppu_game_loop () {
 			cycle_cpu();
 		}
 
-	// }
+		cpu_log.close();
+		cpu_log.clear();
+
+		cpu_log.open("./log.txt", std::ios::trunc);
+	}
 }

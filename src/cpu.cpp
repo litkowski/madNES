@@ -49,7 +49,6 @@ enum address_mode {
 	IMPL, ACC, IMM, ABS, XABS, YABS, ABSI, ZP, XZP, YZP, XZPI, ZPIY, REL
 };
 
-
 void push_events_read (address_mode mode, void (*func) ());
 void push_events_read_mod_write (address_mode mode, void (*func) ());
 void push_events_write (address_mode mode, void (*func) ());
@@ -226,9 +225,9 @@ void Init_CPU (Cartridge* mapper) {
 
 	// Assign all registers to their startup states
 	acc = x = y = 0;
-	pc = 0xC000;
-    // pc |= game->cpu_read(0xFFFC);
-    // pc |= game->cpu_read(0xFFFD) << 8;
+	pc = 0;
+    pc |= game->cpu_read(0xFFFC);
+    pc |= game->cpu_read(0xFFFD) << 8;
 	sp = 0xFD;
 	status = 0b00100100;
 
@@ -1162,8 +1161,8 @@ void push_events_read_mod_write (address_mode mode, void (*func) ()) {
         case XABS:
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",X";
             spaces -= 7;
-            push_events({{&fetch_ladd_pc, NULL}, {&fetch_ladd_pc, &add_x_ladd},
-                {&fetch_data_abus, &fix_add}, {&fetch_data_abus, NULL},
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd},
+                {&fetch_data_abus, NULL}, {&fetch_data_abus, NULL},
                 {&write_data_abus, func}, {&write_data_abus, NULL}});
             break;
         case ZP:
@@ -1196,7 +1195,7 @@ void push_events_write (address_mode mode, void (*func) ()) {
         case XABS:
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",X";
             spaces -= 7;
-            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd}, {&fetch_data_abus, &fix_add}, {func, NULL}});
+            push_events({{&fetch_ladd_pc, NULL}, {&fetch_hadd_pc, &add_x_ladd}, {&fetch_data_abus, NULL}, {func, NULL}});
             break;
         case YABS:
             cpu_log << " $" << std::setw(2) << (int) game->cpu_read(pc + 1) << std::setw(2) << (int) game->cpu_read(pc) << ",Y";
