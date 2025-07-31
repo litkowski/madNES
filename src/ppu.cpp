@@ -340,7 +340,7 @@ void write_ppu_from_cpu (uint8_t addr, uint8_t data) {
 			break;
 		case 0x4:
 			OAMDATA = data;
-			((uint8_t*) oam)[OAMADDR & 0b01111111] = data;
+			((uint8_t*) oam)[OAMADDR & 0b1111111] = data;
 			OAMADDR++;
 			break;
 		case 0x5:
@@ -375,6 +375,7 @@ uint8_t read_ppu_from_cpu (uint8_t addr) {
 		case 0x2: {
 			uint8_t old = PPUSTATUS;
 			PPUSTATUS &= ~VBLANK_ACTIVE;
+			w = 0;
 			return old;
 		}
 		case 0x4:
@@ -406,7 +407,7 @@ void ppu_game_loop () {
 			sprite_0_hit = render_sprites();
 		}
 
-		// push_frame_to_screen();
+		push_frame_to_screen();
 		PPUSTATUS &= ~VBLANK_ACTIVE;
 
 		frames++;
