@@ -12,7 +12,7 @@ struct ines_info parse_rom (std::string filename) {
 
 	if (file_path.extension() != ".nes") {
 		printf("Currently only .nes (ines) files are supported.\n");
-		throw std::runtime_error("Given ROM" + filename + "is not of type .nes.");
+		throw std::runtime_error("Given ROM " + filename + "is not of type .nes.");
 	}
 
 	// Open the ROM's filestream, read in its header, and close it
@@ -66,7 +66,7 @@ struct ines_info parse_rom (std::string filename) {
 
 	// Extract iNES 2.0 information and upper byte of mapper
 	rom_info.ines_2 = (0b1100 & header.flags_7) == 0b1000;
-	rom_info.mapper |= (0x0F & header.flags_7);
+	rom_info.mapper |= (0xF0 & header.flags_7);
 
 	if (rom_info.ines_2) {
 

@@ -114,7 +114,7 @@ void render_background_tile (uint8_t x, uint8_t y, uint16_t pattern_table_index,
 
 		// Render the current line
 		for (int x_in_tile = 0; x_in_tile < 8; x_in_tile++) {
-			int color_index = ((tile1 & (1 << x_in_tile)) >> x_in_tile) + ((tile1 & (1 << x_in_tile)) >> x_in_tile) * 2;
+			int color_index = ((tile1 & (1 << x_in_tile)) >> x_in_tile) + ((tile2 & (1 << x_in_tile)) >> x_in_tile) * 2;
 			framebuffer[x + 7 - x_in_tile][y + y_in_tile] = palette_colors[color_index];
 		}
 	}
@@ -134,7 +134,7 @@ void render_sprite (struct sprite sprite) {
 
 	// Copy the particular palette colors to the local palette
 	for (int i = 1; i < 4; i++) {
-		palette_colors[i] = game->ppu_read(0x3F00 + sprite.attributes & 0b11 + 4);
+		palette_colors[i] = game->ppu_read(0x3F10 + (sprite.attributes & 0b11) * 4 + i);
 	}
 
 	// Extract the currently active sprite size from PPUCTRL
@@ -278,7 +278,7 @@ void render_background () {
 
 			// Extract the currently chosen palette
 			uint8_t cur_palette = game->ppu_read(attribute_table_index);
-			uint8_t corner = (x_in_nametable % 2) / 2 + (y_in_nametable % 2);
+			uint8_t corner = ((x_in_nametable / 2) % 2) + ((y_in_nametable / 2) % 2) * 2;
 			uint8_t active_palette = (cur_palette & (0b11 << (corner * 2))) >> (corner * 2);
 
 			// Extract the tile information from the pattern table
@@ -406,7 +406,7 @@ void ppu_game_loop () {
 			sprite_0_hit = render_sprites();
 		}
 
-		// push_frame_to_screen();
+		push_frame_to_screen();
 		PPUSTATUS &= ~VBLANK_ACTIVE;
 
 		frames++;

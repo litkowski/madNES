@@ -60,7 +60,7 @@ void Init_Graphics_And_IO () {
     // Attempt to create a 1280 x 640 SDL window
     window = SDL_CreateWindow("madNES",
                     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                    1280, 640, SDL_WINDOW_MINIMIZED);
+                    1280, 640, SDL_WINDOW_RESIZABLE);
 
     if (window == NULL) {
         throw std::runtime_error("SDL_WindowCreate Error: ");
