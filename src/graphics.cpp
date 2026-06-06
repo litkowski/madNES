@@ -10,6 +10,7 @@ SDL_Texture* texture;
 const unsigned char sdl_keynames[8] = {SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_RSHIFT,
 	SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT};
 
+
 // This integer must be signed, since -1 represents an invisible pixel
 int8_t framebuffer[264][256];
 

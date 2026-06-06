@@ -1,6 +1,7 @@
 #include "cpu.hpp"
 #include "ppu.hpp"
 #include "graphics.hpp"
+#include "input.hpp"
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -385,10 +386,39 @@ uint8_t read_ppu_from_cpu (uint8_t addr) {
 	return 0;
 }
 
-// Loop the game
+// TODO: Dump all stored sprites using any palette
+void dump_oam (int palette) {
+	std::cout << "Nothing doing.\n";
+}
+
+// Run pause routine
+void ppu_pause () {
+
+	std::cout << "Paused: ";
+
+	// Read in commands
+	while (1) {
+		std::string command;
+		std::getline(std::cin, command);
+		if ("dump oam" == command) {
+			dump_oam(0);
+		} if ("resume" == command) {
+			return;
+		}
+	}
+
+}
+
+// Loop the game. Must be done through the PPU to synchonize CPU
 void ppu_game_loop () {
 
 	while (1) {
+
+		// Check for a user command
+		switch (read_command()) {
+			case PAUSE:
+				ppu_pause();
+		}
 
 		// Reset sprite 0 hit
 		PPUSTATUS &= ~SPRITE_0;
@@ -410,7 +440,6 @@ void ppu_game_loop () {
 		PPUSTATUS &= ~VBLANK_ACTIVE;
 
 		frames++;
-		std::cout << "Frames rendered: " << frames << "\n";
 
 		// Cycle CPU until sprite 0 hits
 		for (int i = 0; i < sprite_0_hit; i++) {

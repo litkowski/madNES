@@ -1,3 +1,4 @@
+#include "input.hpp"
 #include <SDL2/SDL.h>
 
 uint8_t poll_latch;
@@ -8,6 +9,8 @@ uint8_t current_bit_2;
 
 const unsigned char SDL_Keynames[8] = {SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_RSHIFT,
 	SDL_SCANCODE_RETURN, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT};
+
+const unsigned char SDL_Command_Keynames[1] = {SDL_SCANCODE_SPACE};
 
 // Signal the I/O system to poll both controllers
 // TODO: Implement second controller support
@@ -48,4 +51,18 @@ uint8_t read_controller_2 () {
 	data_line |= ((controller2 & (1 << current_bit_2)) >> current_bit_2);
 	current_bit_2++;
 	return data_line;
+}
+
+// Read a command from the user
+user_command read_command () {
+
+	const unsigned char* SDL_keys = SDL_GetKeyboardState(NULL);
+
+	for (int cur_input = 0; cur_input < 1; cur_input++) {
+		if (SDL_keys[SDL_Command_Keynames[cur_input]]) {
+			return (user_command) (cur_input + 1);
+		}
+	}
+
+	return NONE;
 }
