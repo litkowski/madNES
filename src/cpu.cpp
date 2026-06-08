@@ -1253,7 +1253,7 @@ void AND (address_mode mode) {
 // Shift the accumulator left one bit
 void ASLA (address_mode mode) {
     print_instruction_bytes(mode);
-    cpu_log << "ASL A ";
+    cpu_log << "ASL A";
     push_events({{&asl_acc, NULL}});
 }
 
@@ -1511,7 +1511,7 @@ void LDY (address_mode mode) {
 // Shift the accumulator right by one
 void LSRA (address_mode mode) {
     print_instruction_bytes(mode);
-    cpu_log << "LSR A ";
+    cpu_log << "LSR A";
     push_events({{&lsr_acc, NULL}});
 }
 

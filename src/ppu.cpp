@@ -103,7 +103,7 @@ void render_background_tile (uint8_t x, uint8_t y, uint16_t pattern_table_index,
 
 	// Copy the particular palette colors to the local palette
 	for (int i = 1; i < 4; i++) {
-		palette_colors[i] = game->ppu_read(0x3F00 + palette_index + i);
+		palette_colors[i] = game->ppu_read(0x3F00 + (palette_index * 4) + i);
 	}
 
 	// Iterate through the tile, setting framebuffer values as needed
@@ -145,7 +145,7 @@ void render_sprite (struct sprite sprite) {
 	uint16_t pattern_table_index;
 	if (PPUCTRL & SPRITE_SIZE) {
 		// Set the index for an 8x16 sprite
-		pattern_table_index = (0x1000 * (sprite.tile_index & 0b1)) + ((sprite.tile_index & ~ 0b1) << 4);
+		pattern_table_index = (0x1000 * (sprite.tile_index & 0b1)) + ((sprite.tile_index & ~0b1) << 4);
 	} else {
 		// Set the index for an 8x8 sprite
 		pattern_table_index = (((PPUCTRL & SPRITE_PATTERN) >> 3) * 0x1000) | (sprite.tile_index << 4);
@@ -164,11 +164,15 @@ void render_sprite (struct sprite sprite) {
 				uint8_t tile2 = game->ppu_read(pattern_table_index + i + 8);
 
 				// Render the current line
-				for (int j = sprite.x; j < sprite.x + 8; j++) {
+				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
 					framebuffer[sprite.x + j][sprite.y + i] = palette_colors[color_index];
 				}
+
 			}
+
+			// TODO: This is temporary; for debugging
+			push_frame_to_screen();
 
 			break;
 
@@ -182,7 +186,7 @@ void render_sprite (struct sprite sprite) {
 				uint8_t tile2 = game->ppu_read(pattern_table_index + i + 8);
 
 				// Render the current line
-				for (int j = sprite.x; j < sprite.x + 8; j++) {
+				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
 					framebuffer[sprite.x + 8 - j][sprite.y + i] = palette_colors[color_index];
 				}
@@ -201,7 +205,7 @@ void render_sprite (struct sprite sprite) {
 				uint8_t tile2 = game->ppu_read(pattern_table_index + i + 8);
 
 				// Render the current line
-				for (int j = sprite.x; j < sprite.x + 8; j++) {
+				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
 					framebuffer[sprite.x + j][sprite.y + i + sprite_size - 16] = palette_colors[color_index];
 				}
@@ -220,7 +224,7 @@ void render_sprite (struct sprite sprite) {
 				uint8_t tile2 = game->ppu_read(pattern_table_index + i + 8);
 
 				// Render the current line
-				for (int j = sprite.x; j < sprite.x + 8; j++) {
+				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
 					framebuffer[sprite.x + 8 - j][sprite.y + i + sprite_size - 16] = palette_colors[color_index];
 				}
@@ -391,6 +395,11 @@ void dump_oam (int palette) {
 	std::cout << "Nothing doing.\n";
 }
 
+// TODO: Dump all palette colors
+void dump_palettes () {
+
+}
+
 // Run pause routine
 void ppu_pause () {
 
@@ -436,7 +445,6 @@ void ppu_game_loop () {
 			sprite_0_hit = render_sprites();
 		}
 
-		push_frame_to_screen();
 		PPUSTATUS &= ~VBLANK_ACTIVE;
 
 		frames++;
