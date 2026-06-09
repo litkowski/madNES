@@ -134,7 +134,7 @@ void NROM::cpu_write (uint16_t addr, uint8_t data) {
         write_ppu_from_cpu(0x14, data);
     } else if (addr == 0x4016) {
         cpu_memory[addr] = data;
-        signal_input_poll();
+        signal_input_poll(data);
     } else if (addr <= 0x4017) {
         cpu_memory[addr] = data;
     } else if (addr <= 0x401F) {
@@ -179,7 +179,7 @@ void NROM::ppu_write (uint16_t addr, uint8_t data) {
     } else if (addr <= 0x3F1F) {
         if (addr % 4) {
             ppu_memory[addr] = data;
-        } else {
+        } else if (!(addr & 0xF)) {
             ppu_memory[0x3F00] = data;
         }
     } else if (addr <= 0x3FFF) {
