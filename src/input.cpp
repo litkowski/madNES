@@ -17,13 +17,14 @@ const unsigned char SDL_Command_Keynames[1] = {SDL_SCANCODE_SPACE};
 // TODO: Implement correct behavior for polling
 void signal_input_poll (uint8_t data) {
 
-	strobe = data;
+	// strobe = data;
 
 	// Poll the keyboard state
 	SDL_PumpEvents();
 	const unsigned char* SDL_keys = SDL_GetKeyboardState(NULL);
 
 	// Update controller 1's bits
+	controller1 = 0;
 	current_bit_1 = current_bit_2 = 0;
 	for (int cur_input = 0; cur_input < 8; cur_input++) {
 		controller1 |= SDL_keys[SDL_Keynames[cur_input]] << cur_input;
@@ -35,10 +36,10 @@ void signal_input_poll (uint8_t data) {
 uint8_t read_controller_1 () {
 
 	// If the last write was 1, poll the state of A and return it
-	if (strobe) {
+	/* if (strobe) {
 		signal_input_poll(1);
 		return controller1 & 0b1;
-	}
+	} */
 
 	// Read the current bit of controller 1 into the data line
 	uint8_t data_line = 0;

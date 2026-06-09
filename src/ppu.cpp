@@ -455,6 +455,7 @@ void ppu_game_loop () {
 	while (1) {
 
 		// Check for a user command
+		// TODO: Switch to an SDL event pause
 		switch (read_command()) {
 			case PAUSE:
 				ppu_pause();
