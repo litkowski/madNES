@@ -177,11 +177,7 @@ void NROM::ppu_write (uint16_t addr, uint8_t data) {
     } else if (addr <= 0x3EFF) {
         ppu_memory[addr] = data;
     } else if (addr <= 0x3F1F) {
-        if (addr % 4) {
-            ppu_memory[addr] = data;
-        } else {
-            ppu_memory[0x3F00] = data;
-        }
+        ppu_memory[addr] = data;
     } else if (addr <= 0x3FFF) {
         ppu_memory[0x3F00 + ((addr - 0x3F20) % 0x0020)] = data;;
     } else {
