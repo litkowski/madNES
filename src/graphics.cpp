@@ -81,8 +81,9 @@ void Init_Graphics_And_IO () {
 }
 
 // Render the framebuffer to the screen
-// Sleep for one 60th of a second after frame
 void push_frame_to_screen () {
+
+	// Measure time since last, print current FPS
 
 	/* Texture method
 	uint8_t* texture_framebuffer;

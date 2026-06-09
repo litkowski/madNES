@@ -2,7 +2,11 @@
 #include "ppu.hpp"
 #include "graphics.hpp"
 #include "input.hpp"
+
 #include <cstring>
+#include <ctime>
+
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -63,7 +67,8 @@ uint16_t v;
 uint16_t t;
 uint8_t w;
 
-int frames;
+std::timespec last_time;
+std::timespec current_time;
 
 // CPU log, we include it so we can clear every frame
 extern std::ofstream cpu_log;
@@ -88,10 +93,12 @@ void Init_PPU (Cartridge* mapper) {
 	v = t = 0;
 	w = 8;
 	cycles_left = 0;
-	frames = 0;
 
 	// Initialize cartridge
 	game = mapper;
+
+	// Take the initial time
+	std::timespec_get(&last_time, TIME_UTC);
 }
 
 // Render a single tile on the background
@@ -128,6 +135,10 @@ int render_sprite_0 () {
 
 // Render a sprite to the framebuffer
 void render_sprite (struct sprite sprite) {
+
+	if (sprite.y > 240) {
+		return;
+	}
 
 	// Copy the universal background color to the local palette
 	uint8_t palette_colors[4];
@@ -166,7 +177,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[sprite.x + j][sprite.y + i] = palette_colors[color_index];
+					framebuffer[sprite.x + 7 - j][sprite.y + i] = palette_colors[color_index];
 				}
 
 			}
@@ -296,7 +307,6 @@ void render_background () {
 		first_tile = first_tile % 0x1000 + 0x2000;
 	}
 
-	push_frame_to_screen();
 }
 
 // Render all sprites. Returns the first cycle to
@@ -415,6 +425,30 @@ void ppu_pause () {
 
 }
 
+// Measure the current framerate
+void print_fps () {
+
+	// TODO
+
+	/*
+
+	// Get the time since the last frame in nanoseconds
+	std::timespec_get(&current_time, TIME_UTC);
+	time_t frame_time_nsec = (current_time.tv_nsec - last_time.tv_nsec);
+	double billion  = 1000000000;
+	double fps = billion / frame_time_nsec;
+
+	// Print the current framerate
+	std::cout << std::setprecision(2);
+	std::cout << "\r" << "FPS: " << fps;
+
+	// Get ready for next time
+	last_time = current_time;
+
+	*/
+
+}
+
 // Loop the game. Must be done through the PPU to synchonize CPU
 void ppu_game_loop () {
 
@@ -435,16 +469,14 @@ void ppu_game_loop () {
 			render_background();
 		}
 
-		push_frame_to_screen();
-
 		// Render sprites
 		if (PPUMASK & ENABLE_SPRITES) {
 			sprite_0_hit = render_sprites();
 		}
 
-		PPUSTATUS &= ~VBLANK_ACTIVE;
+		push_frame_to_screen();
 
-		frames++;
+		PPUSTATUS &= ~VBLANK_ACTIVE;
 
 		// Cycle CPU until sprite 0 hits
 		for (int i = 0; i < sprite_0_hit; i++) {
@@ -471,5 +503,7 @@ void ppu_game_loop () {
 		cpu_log.clear();
 
 		cpu_log.open("./log.txt", std::ios::trunc);
+
+		print_fps();
 	}
 }
