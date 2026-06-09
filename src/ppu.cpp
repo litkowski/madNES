@@ -171,9 +171,6 @@ void render_sprite (struct sprite sprite) {
 
 			}
 
-			// TODO: This is temporary; for debugging
-			push_frame_to_screen();
-
 			break;
 
 		// Render a horizontally flipped sprite
@@ -188,7 +185,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[sprite.x + 8 - j][sprite.y + i] = palette_colors[color_index];
+					framebuffer[sprite.x + 7 - j][sprite.y + i] = palette_colors[color_index];
 				}
 			}
 
