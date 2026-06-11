@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #include "parse_rom.hpp"
 
@@ -170,7 +171,7 @@ struct ines_info parse_rom (std::string filename) {
 				rom_info.default_expansion_dev = NES_CONTROLLER;
 				break;
 			default:
-				throw std::runtime_error("Only NES controllers currently supported");
+				std::cout << "Only NES controllers currently supported\n";
 		}
 
 	} else {

@@ -41,7 +41,14 @@
 #define FLIP_SPRITE_HORIZ 0b01000000
 #define FLIP_SPRITE_VERT 0b10000000
 
-extern int8_t framebuffer[264][256];
+// We have three framebuffer layers
+extern int8_t background_framebuffer[264][256];
+extern int8_t back_sprite_framebuffer[264][256];
+extern int8_t front_sprite_framebuffer[264][256];
+
+// Store the current frame's active palettes
+extern int8_t palettes[32];
+
 extern Cartridge* game;
 
 struct sprite {
@@ -84,7 +91,9 @@ uint32_t cycles_left;
 void Init_PPU (Cartridge* mapper) {
 
 	// Reset framebuffer
-	std::memset(framebuffer, 0, 264 * 256);
+	std::memset(background_framebuffer, 0, 264 * 256);
+	std::memset(back_sprite_framebuffer, 0, 264 * 256);
+	std::memset(front_sprite_framebuffer, 0, 264 * 256);
 
 	// Initialize all PPU memory and registers to 0
 	std::memset(oam, 0, sizeof(struct sprite) * 64);
@@ -104,15 +113,6 @@ void Init_PPU (Cartridge* mapper) {
 // Render a single tile on the background
 void render_background_tile (uint8_t x, uint8_t y, uint16_t pattern_table_index, uint8_t palette_index) {
 
-	// Copy the universal background color to the local palette
-	uint8_t palette_colors[4];
-	palette_colors[0] = game->ppu_read(0x3F00);
-
-	// Copy the particular palette colors to the local palette
-	for (int i = 1; i < 4; i++) {
-		palette_colors[i] = game->ppu_read(0x3F00 + (palette_index * 4) + i);
-	}
-
 	// Iterate through the tile, setting framebuffer values as needed
 	for (int y_in_tile = 0; y_in_tile < 8; y_in_tile++) {
 
@@ -123,14 +123,17 @@ void render_background_tile (uint8_t x, uint8_t y, uint16_t pattern_table_index,
 		// Render the current line
 		for (int x_in_tile = 0; x_in_tile < 8; x_in_tile++) {
 			int color_index = ((tile1 & (1 << x_in_tile)) >> x_in_tile) + ((tile2 & (1 << x_in_tile)) >> x_in_tile) * 2;
-			framebuffer[x + 7 - x_in_tile][y + y_in_tile] = palette_colors[color_index];
+			background_framebuffer[x + 7 - x_in_tile][y + y_in_tile] = palette_index + color_index;
 		}
 	}
+
 }
 
-// Render sprite 0 to the framebuffer, return the cycle sprite 0 hit occurs
-int render_sprite_0 () {
+// Render sprite 0 to the framebuffer; return the cycle sprite 0 hit occurs
+int render_sprite_0 (struct sprite sprite) {
+
 	return 0;
+
 }
 
 // Render a sprite to the framebuffer
@@ -140,14 +143,13 @@ void render_sprite (struct sprite sprite) {
 		return;
 	}
 
-	// Copy the universal background color to the local palette
-	uint8_t palette_colors[4];
-	palette_colors[0] = game->ppu_read(0x3F00);
-
-	// Copy the particular palette colors to the local palette
-	for (int i = 1; i < 4; i++) {
-		palette_colors[i] = game->ppu_read(0x3F10 + (sprite.attributes & 0b11) * 4 + i);
+	// Choose the correct framebuffer to use
+	int8_t* framebuffer = (int8_t*) front_sprite_framebuffer;
+	if (sprite.attributes & 0b1000) {
+		framebuffer = (int8_t*) back_sprite_framebuffer;
 	}
+
+	int palette_index = 16 + sprite.attributes & 0b11 * 4;
 
 	// Extract the currently active sprite size from PPUCTRL
 	uint8_t sprite_size = 8 + ((PPUCTRL & SPRITE_SIZE) >> 2);
@@ -163,10 +165,10 @@ void render_sprite (struct sprite sprite) {
 	}
 
 	// Render the different possible sprites
-	switch ((sprite.attributes & 0b11000000) >> 6) {
+	switch ((sprite.attributes & 0b11000000)) {
 
 		// Render a normal sprite
-		case 0b00:
+		case 0b00000000:
 
 			for (int i = 0; i < sprite_size; i++) {
 
@@ -177,7 +179,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[sprite.x + 7 - j][sprite.y + i] = palette_colors[color_index];
+					framebuffer[(sprite.x + 7 - j) * 264 + sprite.y + i] = palette_index + color_index;
 				}
 
 			}
@@ -185,7 +187,7 @@ void render_sprite (struct sprite sprite) {
 			break;
 
 		// Render a horizontally flipped sprite
-		case 0b01:
+		case 0b01000000:
 
 			for (int i = 0; i < sprite_size; i++) {
 
@@ -196,7 +198,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[sprite.x + 7 - j][sprite.y + i] = palette_colors[color_index];
+					framebuffer[(sprite.x + 7 - j) * 264 + sprite.y + i] = palette_index + color_index;
 				}
 			}
 
@@ -204,7 +206,7 @@ void render_sprite (struct sprite sprite) {
 
 		// TODO: Vertical flipping on 8x16 sprites is broken
 		// Render a vertically flipped sprite
-		case 0b10:
+		case 0b10000000:
 
 			for (int i = 0; i < sprite_size; i++) {
 
@@ -215,7 +217,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[sprite.x + j][sprite.y + i + sprite_size - 16] = palette_colors[color_index];
+					framebuffer[(sprite.x + j) * 264 + sprite.y + i + sprite_size - 16] = palette_index + color_index;
 				}
 			}
 
@@ -223,7 +225,7 @@ void render_sprite (struct sprite sprite) {
 
 		// TODO: Vertical flipping on 8x16 sprites is broken
 		// Render a double flipped sprite
-		case 0b11:
+		case 0b11000000:
 
 			for (int i = 0; i < sprite_size; i++) {
 
@@ -234,7 +236,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[sprite.x + 8 - j][sprite.y + i + sprite_size - 16] = palette_colors[color_index];
+					framebuffer[(sprite.x + 8 - j) * 264 + sprite.y + i + sprite_size - 16] = palette_index + color_index;
 				}
 			}
 
@@ -245,9 +247,6 @@ void render_sprite (struct sprite sprite) {
 
 // Render the entire background
 void render_background () {
-
-	// Reset the framebuffer
-	std::memset(framebuffer, 0, 264 * 256);
 
 	// Extract the current scroll nametable
 	uint16_t first_tile = 0x2000 + 0x400 * (NAMETABLE_CTRL & PPUCTRL);
@@ -298,18 +297,18 @@ void render_background () {
 			uint16_t pattern_table_index = ((PPUCTRL & BACKGROUND_PATTERN) >> 4) * 0x1000 + (cur_tile << 4);
 
 			// Add the tile to the framebuffer
-			render_background_tile(x_in_frame * 8, y_in_frame * 8, pattern_table_index, active_palette);
+			render_background_tile(x_in_frame * 8, y_in_frame * 8, pattern_table_index, active_palette * 4);
 			x_in_nametable++;
 		}
 
-		// Render the frame
+		// Move to the next tile
 		first_tile += 32;
 		first_tile = first_tile % 0x1000 + 0x2000;
 	}
 
 }
 
-// Render all sprites. Returns the first cycle to
+// Render all sprites. Returns sprite 0 hit
 int render_sprites () {
 
 	// Work backwards for proper sprite overlapping
@@ -320,8 +319,7 @@ int render_sprites () {
 	}
 
 	// Find the first cycle to trigger sprite 0 hit
-	render_sprite(oam[0]);
-	return 0;
+	return render_sprite_0(oam[0]);
 }
 
 // Copy a page of memory from the CPU's memory space to PPU OAM
@@ -449,6 +447,13 @@ void print_fps () {
 
 }
 
+// Set the current frame's active palettes
+void set_palettes () {
+	for (int i = 0; i < 32; i++) {
+		palettes[i] = game->ppu_read(0x3F00 + i);
+	}
+}
+
 // Loop the game. Must be done through the PPU to synchonize CPU
 void ppu_game_loop () {
 
@@ -464,6 +469,12 @@ void ppu_game_loop () {
 		// Reset sprite 0 hit
 		PPUSTATUS &= ~SPRITE_0;
 		int sprite_0_hit = 27248;
+
+		// Reset the framebuffer, reset palettes
+		std::memset(background_framebuffer, 0, 264 * 256);
+		std::memset(back_sprite_framebuffer, 0, 264 * 256);
+		std::memset(front_sprite_framebuffer, 0, 264 * 256);
+		set_palettes();
 
 		// Render the background
 		if (PPUMASK & ENABLE_BACKGROUND ) {

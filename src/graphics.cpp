@@ -10,9 +10,13 @@ SDL_Texture* texture;
 const unsigned char sdl_keynames[8] = {SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_RSHIFT,
 	SDL_SCANCODE_KP_ENTER, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT};
 
+// We have three framebuffer layers
+int8_t background_framebuffer[264][256];
+int8_t back_sprite_framebuffer[264][256];
+int8_t front_sprite_framebuffer[264][256];
 
-// This integer must be signed, since -1 represents an invisible pixel
-int8_t framebuffer[264][256];
+// Store the current frame's active palettes
+int8_t palettes[32];
 
 struct color {
 	uint8_t red;
@@ -107,11 +111,37 @@ void push_frame_to_screen () {
 	// SDL_Delay(16);
 	*/
 
+	// Fill the entire renderer with the background color
+	struct color cur_color = master_palette[palettes[0]];
+	SDL_SetRenderDrawColor(renderer, cur_color.red, cur_color.green, cur_color.blue, 255);
+	SDL_RenderFillRect(renderer, NULL);
+	SDL_RenderPresent(renderer);
+
 	// Pixel method
 	for (int cur_y = 0; cur_y < 240; cur_y++) {
 		for (int cur_x = 0; cur_x < 256; cur_x++) {
-			struct color cur_color = master_palette[framebuffer[cur_x][cur_y]];
-			SDL_SetRenderDrawColor(renderer, cur_color.red, cur_color.green, cur_color.blue, 255);
+
+			// Extract palette information
+			int palette_colors[3] = {back_sprite_framebuffer[cur_x][cur_y], background_framebuffer[cur_x][cur_y], front_sprite_framebuffer[cur_x][cur_y]};
+			int opacities[3];
+			opacities[0] = (palette_colors[0] & 0b1) | (palette_colors[0] & 0b10 >> 1);
+			opacities[1] = (palette_colors[1] & 0b1) | (palette_colors[1] & 0b10 >> 1);
+			opacities[2] = (palette_colors[2] & 0b1) | (palette_colors[2] & 0b10 >> 1);
+
+			// Copy all three layers of the framebuffer
+			struct color cur_colors[3];
+			cur_colors[0] = master_palette[palette_colors[0]];
+			cur_colors[1] = master_palette[palette_colors[1]];
+			cur_colors[2] = master_palette[palette_colors[2]];
+
+			// Draw all three layers
+			SDL_SetRenderDrawColor(renderer, cur_colors[0].red, cur_colors[0].green, cur_colors[0].blue, 255 * opacities[0]);
+			SDL_RenderDrawPoint(renderer, cur_x, cur_y);
+
+			SDL_SetRenderDrawColor(renderer, cur_colors[1].red, cur_colors[1].green, cur_colors[1].blue, 255 * opacities[1]);
+			SDL_RenderDrawPoint(renderer, cur_x, cur_y);
+
+			SDL_SetRenderDrawColor(renderer, cur_colors[2].red, cur_colors[2].green, cur_colors[2].blue, 255 * opacities[2]);
 			SDL_RenderDrawPoint(renderer, cur_x, cur_y);
 		}
 	}
