@@ -111,6 +111,8 @@ void push_frame_to_screen () {
 	// SDL_Delay(16);
 	*/
 
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
 	// Fill the entire renderer with the background color
 	struct color cur_color = master_palette[palettes[0]];
 	SDL_SetRenderDrawColor(renderer, cur_color.red, cur_color.green, cur_color.blue, 255);
@@ -130,9 +132,9 @@ void push_frame_to_screen () {
 
 			// Copy all three layers of the framebuffer
 			struct color cur_colors[3];
-			cur_colors[0] = master_palette[palette_colors[0]];
-			cur_colors[1] = master_palette[palette_colors[1]];
-			cur_colors[2] = master_palette[palette_colors[2]];
+			cur_colors[0] = master_palette[palettes[palette_colors[0]]];
+			cur_colors[1] = master_palette[palettes[palette_colors[1]]];
+			cur_colors[2] = master_palette[palettes[palette_colors[2]]];
 
 			// Draw all three layers
 			SDL_SetRenderDrawColor(renderer, cur_colors[0].red, cur_colors[0].green, cur_colors[0].blue, 255 * opacities[0]);
@@ -143,6 +145,7 @@ void push_frame_to_screen () {
 
 			SDL_SetRenderDrawColor(renderer, cur_colors[2].red, cur_colors[2].green, cur_colors[2].blue, 255 * opacities[2]);
 			SDL_RenderDrawPoint(renderer, cur_x, cur_y);
+
 		}
 	}
 
