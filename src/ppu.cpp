@@ -149,7 +149,7 @@ void render_sprite (struct sprite sprite) {
 		framebuffer = (int8_t*) back_sprite_framebuffer;
 	}
 
-	int palette_index = 16 + sprite.attributes & 0b11 * 4;
+	int palette_index = 16 + (sprite.attributes & 0b11) * 4;
 
 	// Extract the currently active sprite size from PPUCTRL
 	uint8_t sprite_size = 8 + ((PPUCTRL & SPRITE_SIZE) >> 2);
@@ -179,7 +179,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[(sprite.x + 7 - j) * 264 + sprite.y + i] = palette_index + color_index;
+					framebuffer[(sprite.x + 7 - j) * 256 + sprite.y + i] = palette_index + color_index;
 				}
 
 			}
@@ -198,7 +198,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[(sprite.x + 7 - j) * 264 + sprite.y + i] = palette_index + color_index;
+					framebuffer[(sprite.x + 7 - j) * 256 + sprite.y + i] = palette_index + color_index;
 				}
 			}
 
@@ -217,7 +217,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[(sprite.x + j) * 264 + sprite.y + i + sprite_size - 16] = palette_index + color_index;
+					framebuffer[(sprite.x + j) * 256 + sprite.y + i + sprite_size - 16] = palette_index + color_index;
 				}
 			}
 
@@ -236,7 +236,7 @@ void render_sprite (struct sprite sprite) {
 				// Render the current line
 				for (int j = 0; j < 8; j++) {
 					uint8_t color_index = ((tile1 & (1 << j)) >> j) + ((tile2 & (1 << j)) >> j) * 2;
-					framebuffer[(sprite.x + 8 - j) * 264 + sprite.y + i + sprite_size - 16] = palette_index + color_index;
+					framebuffer[(sprite.x + 8 - j) * 256 + sprite.y + i + sprite_size - 16] = palette_index + color_index;
 				}
 			}
 
@@ -318,8 +318,9 @@ int render_sprites () {
 		}
 	}
 
-	// Find the first cycle to trigger sprite 0 hit
-	return render_sprite_0(oam[0]);
+	// TODO: Find the first cycle to trigger sprite 0 hit
+	render_sprite(oam[0]);
+	return 0;
 }
 
 // Copy a page of memory from the CPU's memory space to PPU OAM

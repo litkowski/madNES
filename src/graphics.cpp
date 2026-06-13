@@ -117,7 +117,6 @@ void push_frame_to_screen () {
 	struct color cur_color = master_palette[palettes[0]];
 	SDL_SetRenderDrawColor(renderer, cur_color.red, cur_color.green, cur_color.blue, 255);
 	SDL_RenderFillRect(renderer, NULL);
-	SDL_RenderPresent(renderer);
 
 	// Pixel method
 	for (int cur_y = 0; cur_y < 240; cur_y++) {
